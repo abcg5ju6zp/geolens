@@ -77,3 +77,10 @@ def test_env_config_and_raster_tiles_restate_security_headers():
         block = conf[start : conf.index("\n    }\n", start)]
         for header in ("X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy"):
             assert f"add_header {header} " in block, f"{opener} drops {header}"
+
+
+def test_raster_tiles_hides_upstream_frame_options():
+    conf = NGINX_CONF.read_text()
+    start = conf.index("location ~ ^/raster-tiles/")
+    block = conf[start : conf.index("\n    }\n", start)]
+    assert "proxy_hide_header X-Frame-Options;" in block
