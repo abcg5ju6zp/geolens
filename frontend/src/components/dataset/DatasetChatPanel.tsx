@@ -8,6 +8,7 @@ import { streamDatasetChatMessage } from '@/api/maps';
 import { useCreateMap } from '@/hooks/use-maps';
 import { useAIAvailability } from '@/hooks/use-ai-availability';
 import { usePermissions } from '@/hooks/use-permissions';
+import type { BuilderEntryIntent } from '@/hooks/use-builder-entry-intent';
 import { QueryResultTable, type QueryResult } from '@/components/viewer/ViewerChatPanel';
 import { stashChatResult, toChatResultHandoff, type ChatResultHandoff } from '@/lib/chat-result-handoff';
 import { chatOverlayCompleteness, overlayFeatureCount } from '@/lib/chat-result-completeness';
@@ -82,7 +83,7 @@ interface DatasetChatPanelProps {
  * and `show_query_result` shows the compact table. There is no map on this
  * page, so instead of a flyover the panel offers "Open in builder" — a new
  * map is created and the builder opens with this dataset staged via the
- * existing `?add_dataset=` flow (AddToMapButton precedent).
+ * same add-dataset entry intent AddToMapButton uses.
  *
  * Self-gates on `useAIAvailability` (token + `use_ai_chat` + AI configured),
  * so anonymous or unpermitted visitors render nothing.
@@ -225,7 +226,8 @@ export function DatasetChatPanel({
       const name = t('addToMap.newMapName', { title: datasetTitle });
       const newMap = await createMap.mutateAsync({ name });
       const carried = spatial ? stashChatResult(spatial) : false;
-      navigate(`/maps/${newMap.id}?add_dataset=${datasetId}${carried ? '&chat_result=1' : ''}`);
+      const state: BuilderEntryIntent = { addDatasetId: datasetId, ...(carried ? { chatResult: true } : {}) };
+      navigate(`/maps/${newMap.id}`, { state });
     } catch {
       // useCreateMap reports the failure.
     }

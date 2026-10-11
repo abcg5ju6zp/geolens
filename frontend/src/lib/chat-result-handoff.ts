@@ -1,10 +1,9 @@
 /**
- * feat(#531 follow-up): session-scoped handoff of a chat query result into
- * the map builder.
+ * Session-scoped handoff of a chat query result into the map builder.
  *
  * DatasetChatPanel has no map, so "Open in builder" creates a map and
- * navigates with `?add_dataset=<id>&chat_result=1`. The spatial result
- * payload (too large for a URL) rides sessionStorage under a single key;
+ * navigates with a `chatResult` entry intent (use-builder-entry-intent.ts).
+ * The spatial result payload rides sessionStorage under a single key;
  * MapBuilderPage takes it exactly once after the map instance exists and
  * renders it through the existing ephemeral-layer mechanism
  * (use-ephemeral-layers.ts).

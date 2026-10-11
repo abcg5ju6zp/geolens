@@ -100,8 +100,8 @@ describe('DatasetChatPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Open in builder/i }));
     expect(mockMutateAsync).toHaveBeenCalledWith({ name: 'NY Parks Map' });
-    // No spatial payload in the result — plain add_dataset URL, nothing stashed.
-    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-9?add_dataset=ds-1');
+    // No spatial payload in the result, so nothing is stashed.
+    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-9', { state: { addDatasetId: 'ds-1' } });
     expect(sessionStorage.getItem('geolens-chat-result')).toBeNull();
   });
 
@@ -145,7 +145,9 @@ describe('DatasetChatPanel', () => {
     await screen.findByText('Found 1 result.');
     await userEvent.click(screen.getByRole('button', { name: /Open in builder/i }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-9?add_dataset=ds-1&chat_result=1');
+    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-9', {
+      state: { addDatasetId: 'ds-1', chatResult: true },
+    });
     // feat(#1241): the prompt rides along so the builder can suggest a name if
     // the carried result is saved as a dataset.
     expect(JSON.parse(sessionStorage.getItem('geolens-chat-result')!)).toEqual({
@@ -245,7 +247,7 @@ describe('DatasetChatPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: /Open in builder/i }));
 
     // The shown table is the count — the earlier geometry must not ride along.
-    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-9?add_dataset=ds-1');
+    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-9', { state: { addDatasetId: 'ds-1' } });
     expect(sessionStorage.getItem('geolens-chat-result')).toBeNull();
   });
 

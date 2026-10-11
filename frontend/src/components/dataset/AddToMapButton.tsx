@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useMaps, useCreateMap } from '@/hooks/use-maps';
 import { usePermissions } from '@/hooks/use-permissions';
+import type { BuilderEntryIntent } from '@/hooks/use-builder-entry-intent';
 import { useAuthStore } from '@/stores/auth-store';
 import { canMutateResource } from '@/lib/ownership';
 
@@ -34,7 +35,7 @@ export function AddToMapButton({ datasetId, datasetTitle }: AddToMapButtonProps)
 
   function handleSelect(mapId: string) {
     setOpen(false);
-    navigate(`/maps/${mapId}?add_dataset=${datasetId}`);
+    navigate(`/maps/${mapId}`, { state: { addDatasetId: datasetId } satisfies BuilderEntryIntent });
   }
 
   async function handleNewMap() {
@@ -44,7 +45,7 @@ export function AddToMapButton({ datasetId, datasetTitle }: AddToMapButtonProps)
         ? t('addToMap.newMapName', { title: datasetTitle })
         : t('addToMap.newMapFallback');
       const newMap = await createMap.mutateAsync({ name });
-      navigate(`/maps/${newMap.id}?add_dataset=${datasetId}`);
+      navigate(`/maps/${newMap.id}`, { state: { addDatasetId: datasetId } satisfies BuilderEntryIntent });
     } catch {
       // useCreateMap reports the failure.
     }

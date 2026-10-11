@@ -79,14 +79,14 @@ describe('AddToMapButton', () => {
     expect(screen.getByRole('menuitem', { name: /New map/i })).toBeInTheDocument();
   });
 
-  it('navigates to existing map builder with add_dataset param', async () => {
+  it('navigates to the existing map builder with the dataset in router state', async () => {
     mockMapsData.maps = [{ id: 'map-1', name: 'Test Map', created_by: 'user-1' }];
 
     render(<AddToMapButton datasetId="ds-1" />);
     await user.click(screen.getByRole('button', { name: /Add to Map/i }));
     await user.click(screen.getByRole('menuitem', { name: 'Test Map' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-1?add_dataset=ds-1');
+    expect(mockNavigate).toHaveBeenCalledWith('/maps/map-1', { state: { addDatasetId: 'ds-1' } });
   });
 
   it('creates new map and navigates to builder on "+ New map"', async () => {
@@ -98,7 +98,7 @@ describe('AddToMapButton', () => {
 
     await waitFor(() => {
       expect(mockMutateAsync).toHaveBeenCalledWith({ name: 'My Dataset Map' });
-      expect(mockNavigate).toHaveBeenCalledWith('/maps/new-map-id?add_dataset=ds-1');
+      expect(mockNavigate).toHaveBeenCalledWith('/maps/new-map-id', { state: { addDatasetId: 'ds-1' } });
     });
   });
 

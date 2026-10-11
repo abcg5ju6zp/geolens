@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router';
+import { useParams, Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { FileText, History, Sparkles, Info, FlaskConical, Loader2 } from 'lucide-react';
 import type { Map as MaplibreMap } from 'maplibre-gl';
@@ -121,18 +121,16 @@ import type { EphemeralAnalysisHandoff } from '@/components/builder/hooks/use-ep
 import { readStorage, removeStorage, storageKeys } from '@/lib/storage';
 import { registerAnalysisAddToMap, useAnalysisJobStore } from '@/stores/analysis-job-store';
 import { takeChatResult } from '@/lib/chat-result-handoff';
+import { useBuilderEntryIntent } from '@/hooks/use-builder-entry-intent';
 
 export function MapBuilderPage() {
   const { id } = useParams<{ id: string }>();
-  // POLISH-01 (Phase 1233-01): detect the ?add_dataset path so useBuilderSave
-  // can defer the first auto-capture until the layer-add effect has synced.
-  // use-builder-layers DELETES the param once processed, so reading it
-  // reactively can flip to false before the capture path runs (WR-01). Freeze
-  // the mount-time value in a ref so the deferred path is honored regardless of
-  // whether the API or the canvas init wins the race.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const pendingLayerAddRef = useRef(searchParams.has('add_dataset'));
-  const pendingLayerAdd = pendingLayerAddRef.current;
+  // The intent is read once at mount, so useBuilderSave can defer the first
+  // auto-capture until the layer-add effect has synced, whichever of the API
+  // and the canvas init wins the race.
+  const entryIntent = useBuilderEntryIntent();
+  const pendingLayerAdd = entryIntent.addDatasetId !== undefined;
+  const chatResultPendingRef = useRef(entryIntent.chatResult === true);
   const { t } = useTranslation('builder');
   const { data: mapData, isLoading, error } = useMap(id, { refetchOnWindowFocus: false });
   const enabledPluginsQuery = useEnabledPlugins();
@@ -273,6 +271,7 @@ export function MapBuilderPage() {
     // auto-zoom watcher can retry once the (possibly still-loading) map
     // becomes ready, instead of silently losing a zoom that arrived first.
     mapInstance,
+    entryIntent.addDatasetId,
   );
   const {
     handleBulkVisibility: applyBulkVisibility,
@@ -370,17 +369,14 @@ export function MapBuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only the method reference matters, not the whole `save` object
   }, [save.maybeAutoCaptureThumbnail]);
 
-  // feat(#531 follow-up): ?chat_result=1 — DatasetChatPanel stashed its last
-  // spatial query result in sessionStorage before navigating here; render it
-  // through the ephemeral-layer path. Gated on mapInstance (not mapData) so
-  // the ephemeral effect never fires against a null map ref.
+  // DatasetChatPanel stashed its last spatial query result in sessionStorage
+  // before navigating here; render it through the ephemeral-layer path. Gated
+  // on mapInstance (not mapData) so the ephemeral effect never fires against a
+  // null map ref.
   const handleChatQueryResult = layers.handleQueryResult;
   useEffect(() => {
-    if (!mapInstance || !searchParams.has('chat_result')) return;
-    setSearchParams((prev) => {
-      prev.delete('chat_result');
-      return prev;
-    }, { replace: true });
+    if (!mapInstance || !chatResultPendingRef.current) return;
+    chatResultPendingRef.current = false;
     const result = takeChatResult();
     // feat(#1241 codex r1): forward everything the stash carries, not just the
     // geometry. Without the completeness pair a clipped carried result reads as
@@ -393,7 +389,7 @@ export function MapBuilderPage() {
         ...(result.prompt ? { prompt: result.prompt } : {}),
       });
     }
-  }, [mapInstance, searchParams, setSearchParams, handleChatQueryResult]);
+  }, [mapInstance, handleChatQueryResult]);
 
   const pluginCtx = useMemo(
     () => ({

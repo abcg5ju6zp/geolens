@@ -1,5 +1,4 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { Map as MaplibreMap } from 'maplibre-gl';
@@ -107,8 +106,9 @@ export function useBuilderLayers(
   // existing call site compiles unchanged; omitting it leaves no reactive
   // signal for retrying a cold-entry auto-zoom.
   mapInstance?: MaplibreMap | null,
+  // Dataset to add as a layer once the map has loaded (useBuilderEntryIntent).
+  addDatasetId?: string,
 ) {
-  const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useTranslation('builder');
   const { data: tileConfig } = useTileConfig();
   const mvtSourceLayerPrefix = tileConfig?.mvt_source_layer_prefix;
@@ -365,11 +365,11 @@ export function useBuilderLayers(
     }
   }, [apiLayers, hasUnsavedChanges, mapData]);
 
-  // Handle ?add_dataset URL param: auto-add a dataset as a layer on map load.
-  // Depends on mapData so the effect re-evaluates once initializedRef is set.
+  // Adds the entry intent's dataset once. Depends on mapData so the effect
+  // re-evaluates once initializedRef is set.
   useEffect(() => {
     if (!initializedRef.current || addDatasetProcessedRef.current) return;
-    const datasetId = searchParams.get('add_dataset');
+    const datasetId = addDatasetId;
     if (!datasetId) return;
     addDatasetProcessedRef.current = true;
     // A fresh map has no saved view of its own (center_lng/
@@ -404,12 +404,8 @@ export function useBuilderLayers(
             }
           },
     );
-    setSearchParams((prev) => {
-      prev.delete('add_dataset');
-      return prev;
-    }, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to URL/map changes only; the applier is stable
-  }, [searchParams, mapData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to intent/map changes only; the applier is stable
+  }, [addDatasetId, mapData]);
 
   // Compute initial view state only once
   const initialViewState = useMemo(() => {

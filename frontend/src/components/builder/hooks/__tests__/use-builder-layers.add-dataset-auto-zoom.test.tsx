@@ -1,14 +1,5 @@
-// fix(#1854): a fresh map (no saved view of its own) auto-adds a dataset via
-// the ?add_dataset URL param but never zoomed to it, so it landed at the
-// world-view default and the newly added layer could be off-screen. The
-// ?add_dataset effect now zooms to the new layer once — but only via a
-// watcher effect on `localLayers`, not directly from handleAddDataset's
-// onSuccessCb: layersRef (which handleZoomToLayer reads) is only synced by
-// the useLayoutEffect mirror on commit, so calling handleZoomToLayer
-// synchronously inside onSuccess would race a still-stale ref (same hazard
-// #554's codex fix documented for the add-layer merge itself). These tests
-// exercise the real ?add_dataset flow end to end to prove the zoom actually
-// fires, not just that the wiring compiles.
+// The add-dataset entry intent adds its layer once and zooms a fresh map to it
+// after the layer commits, not from handleAddDataset's onSuccess.
 import { describe, it, expect, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
@@ -24,11 +15,17 @@ import type { MapResponse } from '@/types/api';
 
 type MaplibreMap = import('maplibre-gl').Map;
 
-function renderWithAddDatasetParam(
+function renderWithAddDatasetIntent(
   mapData: MapResponse,
-  options: { startWithMapLoaded?: boolean; zoomAfterFit?: number } = {},
+  options: {
+    startWithMapLoaded?: boolean;
+    zoomAfterFit?: number;
+    url?: string;
+    addDatasetId?: string;
+  } = {},
 ) {
-  const { startWithMapLoaded = true, zoomAfterFit } = options;
+  const { startWithMapLoaded = true, zoomAfterFit, url = '/maps/map-1' } = options;
+  const addDatasetId = 'addDatasetId' in options ? options.addDatasetId : 'ds-1';
   const map = makeMapLibreMock({ zoomAfterFit });
   const mapRef = {
     current: startWithMapLoaded ? map : null,
@@ -54,7 +51,7 @@ function renderWithAddDatasetParam(
   function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/builder/map-1?add_dataset=ds-1']}>
+        <MemoryRouter initialEntries={[url]}>
           {children}
         </MemoryRouter>
       </QueryClientProvider>
@@ -71,6 +68,7 @@ function renderWithAddDatasetParam(
         removeLayerMutation,
         saveBaselineSyncRef,
         mapInstance,
+        addDatasetId,
       ),
     { wrapper: Wrapper },
   );
@@ -94,10 +92,21 @@ function renderWithAddDatasetParam(
   };
 }
 
-describe('?add_dataset auto-zoom (#1854)', () => {
+describe('add-dataset entry intent', () => {
+  it('adds no layer from an add_dataset query parameter without the intent', () => {
+    const mapData = makeBuilderMap([], { center_lng: null, center_lat: null });
+    const { mutate } = renderWithAddDatasetIntent(mapData, {
+      url: '/maps/map-1?add_dataset=ds-1',
+      addDatasetId: undefined,
+    });
+
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+
   it('zooms to the newly added layer once it commits, on a fresh map with no saved view', () => {
     const mapData = makeBuilderMap([], { center_lng: null, center_lat: null });
-    const { hook, mutate, fitBounds } = renderWithAddDatasetParam(mapData);
+    const { hook, mutate, fitBounds } = renderWithAddDatasetIntent(mapData);
 
     // The effect fires handleAddDataset('ds-1', ...) on mount.
     expect(mutate).toHaveBeenCalledOnce();
@@ -133,7 +142,7 @@ describe('?add_dataset auto-zoom (#1854)', () => {
   // (!map) return;` silently swallowed the zoom and nothing ever retried it.
   it('retries the auto-zoom once the map finishes loading, when the layer commits first (cold entry)', () => {
     const mapData = makeBuilderMap([], { center_lng: null, center_lat: null });
-    const { hook, mutate, fitBounds, simulateMapLoad } = renderWithAddDatasetParam(mapData, {
+    const { hook, mutate, fitBounds, simulateMapLoad } = renderWithAddDatasetIntent(mapData, {
       startWithMapLoaded: false,
     });
 
@@ -166,7 +175,7 @@ describe('?add_dataset auto-zoom (#1854)', () => {
 
   it('does not auto-zoom a map that already has its own saved view', () => {
     const mapData = makeBuilderMap([], { center_lng: -73.9, center_lat: 40.7, zoom: 12 });
-    const { mutate, fitBounds } = renderWithAddDatasetParam(mapData);
+    const { mutate, fitBounds } = renderWithAddDatasetIntent(mapData);
 
     expect(mutate).toHaveBeenCalledOnce();
     const [, { onSuccess }] = mutate.mock.calls[0];
@@ -188,7 +197,7 @@ describe('?add_dataset auto-zoom (#1854)', () => {
   it('does not auto-zoom a centerless map that already has an existing layer', () => {
     const existingLayer = makeBuilderLayer({ id: 'existing-layer-id', dataset_id: 'ds-existing' });
     const mapData = makeBuilderMap([existingLayer], { center_lng: null, center_lat: null });
-    const { mutate, fitBounds } = renderWithAddDatasetParam(mapData);
+    const { mutate, fitBounds } = renderWithAddDatasetIntent(mapData);
 
     expect(mutate).toHaveBeenCalledOnce();
     const [, { onSuccess }] = mutate.mock.calls[0];
@@ -214,7 +223,7 @@ describe('?add_dataset auto-zoom (#1854)', () => {
       dataset_extent_bbox: [-80, 35, -75, 40],
     });
     const mapData = makeBuilderMap([existingLayer], { center_lng: null, center_lat: null });
-    const { hook, mutate, fitBounds, setZoom, simulateMapLoad } = renderWithAddDatasetParam(mapData, {
+    const { hook, mutate, fitBounds, setZoom, simulateMapLoad } = renderWithAddDatasetIntent(mapData, {
       startWithMapLoaded: false,
     });
 
@@ -259,7 +268,7 @@ describe('?add_dataset auto-zoom (#1854)', () => {
       dataset_extent_bbox: [-160, -70, -20, 10],
     });
     const mapData = makeBuilderMap([existingLayer], { center_lng: null, center_lat: null });
-    const { mutate, fitBounds, setZoom, simulateMapLoad } = renderWithAddDatasetParam(mapData, {
+    const { mutate, fitBounds, setZoom, simulateMapLoad } = renderWithAddDatasetIntent(mapData, {
       startWithMapLoaded: false,
       zoomAfterFit: 1,
     });

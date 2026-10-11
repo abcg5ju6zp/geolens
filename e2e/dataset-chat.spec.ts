@@ -153,9 +153,7 @@ test.describe('Dataset AI chat', () => {
     ).toBeVisible();
     await expect(page.getByText('Central Park', { exact: true })).toBeVisible();
 
-    // "Open in builder" creates a REAL map and stages this dataset. The
-    // ?add_dataset param is consumed (deleted) by the builder on load, so
-    // assert the map route rather than the transient query string.
+    // "Open in builder" creates a REAL map and stages this dataset.
     await page.getByRole('button', { name: 'Open in builder' }).click();
     await page.waitForURL(/\/maps\/[0-9a-f-]{36}/);
 
