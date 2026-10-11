@@ -241,10 +241,6 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         return path
 
     @classmethod
-    def _standards_path(cls, request: Request) -> str | None:
-        return standards_api_path(cls._request_path(request))
-
-    @classmethod
     def _public_asset_methods(cls, request: Request) -> str | None:
         request_path = cls._request_path(request)
         for pattern, allow_methods in _PUBLIC_ASSET_PATHS:

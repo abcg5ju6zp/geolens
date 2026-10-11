@@ -39,7 +39,6 @@ configure_gdal_s3_env(settings)
 setup_logging(
     json_logs=settings.log_json,
     log_level=settings.log_level,
-    production=settings.is_production,
 )
 structlog.contextvars.bind_contextvars(service="worker")
 log = structlog.get_logger()

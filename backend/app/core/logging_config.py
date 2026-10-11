@@ -397,16 +397,11 @@ def apply_http_logger_levels(root_level: int | str) -> None:
         logging.getLogger(_log).setLevel(level)
 
 
-def setup_logging(
-    json_logs: bool = False, log_level: str = "INFO", *, production: bool = False
-) -> None:
+def setup_logging(json_logs: bool = False, log_level: str = "INFO") -> None:
     """Configure structlog + stdlib logging with shared processor chain.
 
-    fix(#1746): `production` no longer selects the exception-
-    rendering posture -- dev and production render exceptions identically
-    (plain, scrubbed, no rich), since `format_exc_info` runs unconditionally.
-    `production` is still threaded through from `settings.is_production` in
-    case a future difference needs it; today it affects nothing here.
+    Dev and production render exceptions identically (plain, scrubbed, no
+    rich), since `format_exc_info` runs unconditionally.
     """
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,

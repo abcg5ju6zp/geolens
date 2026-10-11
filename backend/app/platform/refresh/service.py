@@ -634,18 +634,6 @@ async def claim_admitted_run_for_job(
     return result.scalar_one_or_none()
 
 
-async def claim_scheduled_run_for_job(
-    session: AsyncSession,
-    ingest_job_id: uuid.UUID,
-    *,
-    execution_key: uuid.UUID,
-) -> uuid.UUID | None:
-    """Compatibility wrapper for callers that only admit scheduled work."""
-    return await claim_admitted_run_for_job(
-        session, ingest_job_id, execution_key=execution_key
-    )
-
-
 async def reject_pending_admitted_refresh(
     session: AsyncSession,
     *,
@@ -764,11 +752,6 @@ async def expire_unclaimed_admitted_runs(session: AsyncSession) -> list[uuid.UUI
         if run_id is not None:
             expired.append(run_id)
     return expired
-
-
-async def expire_unclaimed_scheduled_runs(session: AsyncSession) -> list[uuid.UUID]:
-    """Compatibility wrapper for the historical scheduled-only recovery name."""
-    return await expire_unclaimed_admitted_runs(session)
 
 
 async def cancel_active_run_for_job(

@@ -789,11 +789,6 @@ async def _call_llm_endpoint(
         )
 
 
-# Backward-compat alias — older callers import _call_metadata_ai by name.
-async def _call_metadata_ai(coro: Awaitable[_T], error_prefix: str) -> _T:
-    return await _call_llm_endpoint(coro, error_prefix=error_prefix)
-
-
 async def _authorize_metadata_dataset(
     db: AsyncSession, dataset_id: str, user: Identity
 ) -> None:
@@ -843,9 +838,9 @@ async def generate_metadata_summary(
     """Generate an AI-drafted summary for a dataset."""
     await _check_ai_available(db)
     await _authorize_metadata_dataset(db, body.dataset_id, user)
-    return await _call_metadata_ai(
+    return await _call_llm_endpoint(
         generate_summary_draft(db, body.dataset_id, port=port, user_id=user.id),
-        "AI metadata summary generation",
+        error_prefix="AI metadata summary generation",
     )
 
 
@@ -866,11 +861,11 @@ async def generate_metadata_keywords(
     await _check_ai_available(db)
     await _authorize_metadata_dataset(db, body.dataset_id, user)
     user_roles = await port.get_user_roles(db, user)
-    return await _call_metadata_ai(
+    return await _call_llm_endpoint(
         generate_keyword_suggestions(
             db, body.dataset_id, port=port, user=user, user_roles=user_roles
         ),
-        "AI metadata keyword generation",
+        error_prefix="AI metadata keyword generation",
     )
 
 
@@ -890,9 +885,9 @@ async def generate_metadata_lineage(
     """Generate an AI-drafted lineage summary for a dataset."""
     await _check_ai_available(db)
     await _authorize_metadata_dataset(db, body.dataset_id, user)
-    return await _call_metadata_ai(
+    return await _call_llm_endpoint(
         generate_lineage_draft(db, body.dataset_id, port=port, user_id=user.id),
-        "AI metadata lineage generation",
+        error_prefix="AI metadata lineage generation",
     )
 
 
@@ -912,9 +907,9 @@ async def generate_metadata_quality_statement(
     """Generate an AI-drafted quality statement for a dataset."""
     await _check_ai_available(db)
     await _authorize_metadata_dataset(db, body.dataset_id, user)
-    return await _call_metadata_ai(
+    return await _call_llm_endpoint(
         generate_quality_statement_draft(
             db, body.dataset_id, port=port, user_id=user.id
         ),
-        "AI metadata quality statement generation",
+        error_prefix="AI metadata quality statement generation",
     )

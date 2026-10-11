@@ -70,7 +70,6 @@ import slowapi.middleware as slowapi_middleware_module
 setup_logging(
     json_logs=settings.log_json,
     log_level=settings.log_level,
-    production=settings.is_production,
 )
 structlog.contextvars.bind_contextvars(service="api")
 

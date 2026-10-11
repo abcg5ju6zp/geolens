@@ -569,17 +569,6 @@ class AuthService:
             await self.db.commit()
         return new_version
 
-    async def revoke_all_refresh_tokens(self, user_id: uuid.UUID) -> int:
-        """Backward-compatible alias for revoke_all_tokens.
-
-        Delegates to revoke_all_tokens (which also bumps token_version), so
-        direct callers outside the auth router get the same semantics.
-        Returns the new token_version value (previously returned rowcount —
-        callers depending on the exact value should switch to
-        revoke_all_tokens directly).
-        """
-        return await self.revoke_all_tokens(user_id)
-
     async def register_user(
         self,
         username: str,
