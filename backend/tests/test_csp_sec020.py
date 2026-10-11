@@ -58,3 +58,22 @@ def test_fouc_script_externalized():
         "index.html must not contain an inline <script> block (SEC-020 / script-src 'self')"
     )
     assert THEME_INIT.exists(), "frontend/public/theme-init.js must exist"
+
+
+def test_csp_restricts_form_action():
+    csps = _CSP_RE.findall(NGINX_CONF.read_text())
+    assert csps
+    for csp in csps:
+        assert "form-action 'self'" in csp, f"CSP missing form-action 'self': {csp}"
+
+
+def test_env_config_and_raster_tiles_restate_security_headers():
+    conf = NGINX_CONF.read_text()
+    for opener in (
+        "location = /env-config.js {",
+        "location ~ ^/raster-tiles/",
+    ):
+        start = conf.index(opener)
+        block = conf[start : conf.index("\n    }\n", start)]
+        for header in ("X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy"):
+            assert f"add_header {header} " in block, f"{opener} drops {header}"

@@ -394,7 +394,7 @@ function ValueDisplay({
             src={srcUrl}
             title={t('featurePopup.youtubeTitle')}
             sandbox="allow-scripts allow-same-origin allow-presentation"
-            referrerPolicy="no-referrer-when-downgrade"
+            referrerPolicy="strict-origin-when-cross-origin"
             loading="lazy"
             className="max-h-32 max-w-full rounded-sm w-full aspect-video"
           />
