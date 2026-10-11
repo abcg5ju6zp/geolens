@@ -16,6 +16,7 @@ from app.standards.distributions import (
     PublishedDistribution,
     published_distributions,
 )
+from app.standards.text import has_text, required_description
 
 if TYPE_CHECKING:
     from app.modules.catalog.datasets.domain.models import (
@@ -68,7 +69,7 @@ def record_to_dcat_us3(
     result["identifier"] = str(dataset.id)
     result["title"] = record.title
 
-    result["description"] = _required_description(record.title, record.summary)
+    result["description"] = required_description(record.title, record.summary)
 
     result["publisher"] = _organization(record)
 
@@ -198,7 +199,7 @@ def dcat_us3_fallback_fields(
 ) -> tuple[str, ...]:
     """Return required fields supplied by deterministic profile fallbacks."""
     fields: list[str] = []
-    if not _has_text(dataset.record.summary):
+    if not has_text(dataset.record.summary):
         fields.append("description")
     has_record_contact = any(
         _contact_to_dcat_us3(contact) is not None for contact in dataset.record.contacts
@@ -234,7 +235,7 @@ def _contact_to_dcat_us3(contact: RecordContact) -> dict | None:
 
     name = contact.name or contact.organization
     email = _mailto(contact.email.strip())
-    if not _has_text(name) or _EMAIL_PATTERN.fullmatch(email) is None:
+    if not has_text(name) or _EMAIL_PATTERN.fullmatch(email) is None:
         return None
 
     result: dict = {
@@ -249,16 +250,6 @@ def _contact_to_dcat_us3(contact: RecordContact) -> dict | None:
     if contact.role is not None:
         result["title"] = contact.role
     return _strip_empty(result)
-
-
-def _required_description(title: str, summary: str | None) -> str:
-    if _has_text(summary):
-        return summary.strip()
-    return title.strip() or "Untitled dataset"
-
-
-def _has_text(value: str | None) -> bool:
-    return bool(value and value.strip())
 
 
 def _distribution_to_dcat_us3(

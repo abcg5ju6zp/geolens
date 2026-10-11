@@ -31,6 +31,7 @@ from app.standards.distributions import (
     published_distributions,
 )
 from app.standards.ogc.utils import normalize_language_tag
+from app.standards.text import has_text, required_description
 
 logger = structlog.stdlib.get_logger(__name__)
 
@@ -124,7 +125,7 @@ def record_to_geodcat_ap(
     result["dcterms:language"] = _lang_to_uri(lang)
 
     result["dcterms:description"] = {
-        "@value": _required_description(record.title, record.summary),
+        "@value": required_description(record.title, record.summary),
         "@language": lang,
     }
 
@@ -276,19 +277,9 @@ def catalog_to_geodcat_ap(
 
 def geodcat_ap_fallback_fields(dataset: Dataset) -> tuple[str, ...]:
     """Return protocol-required fields supplied by deterministic fallbacks."""
-    if not _has_text(dataset.record.summary):
+    if not has_text(dataset.record.summary):
         return ("dcterms:description",)
     return ()
-
-
-def _required_description(title: str, summary: str | None) -> str:
-    if _has_text(summary):
-        return summary.strip()
-    return title.strip() or "Untitled dataset"
-
-
-def _has_text(value: str | None) -> bool:
-    return bool(value and value.strip())
 
 
 # ---------------------------------------------------------------------------

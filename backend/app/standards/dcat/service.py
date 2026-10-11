@@ -17,6 +17,7 @@ from app.standards.distributions import (
     PublishedDistribution,
     published_distributions,
 )
+from app.standards.text import has_text, required_description
 
 logger = structlog.stdlib.get_logger(__name__)
 
@@ -284,12 +285,12 @@ def record_to_dcat(
     # Per-record language
     result["dcterms:language"] = _lang_to_uri(lang)
 
-    if _has_text(localized.summary):
+    if has_text(localized.summary):
         result["dcterms:description"] = {
             "@value": localized.summary.strip(),
             "@language": lang,
         }
-    elif _has_text(record.summary):
+    elif has_text(record.summary):
         # A title-only translation is still useful. DCAT requires a
         # description, so retain the primary summary with its own provenance
         # instead of dropping the whole record from catalog feeds.
@@ -299,7 +300,7 @@ def record_to_dcat(
         }
     else:
         result["dcterms:description"] = {
-            "@value": _required_description(localized.title, None),
+            "@value": required_description(localized.title, None),
             "@language": lang,
         }
 
@@ -492,17 +493,6 @@ def dcat_fallback_fields(
 ) -> tuple[str, ...]:
     """Return protocol-required fields supplied by deterministic fallbacks."""
     localized = select_localized_record_text(dataset.record, preferred_languages)
-    if not _has_text(localized.summary) and not _has_text(dataset.record.summary):
+    if not has_text(localized.summary) and not has_text(dataset.record.summary):
         return ("dcterms:description",)
     return ()
-
-
-def _required_description(title: str, summary: str | None) -> str:
-    """Return a non-empty, truthful description for catalog harvesting."""
-    if _has_text(summary):
-        return summary.strip()
-    return title.strip() or "Untitled dataset"
-
-
-def _has_text(value: str | None) -> bool:
-    return bool(value and value.strip())

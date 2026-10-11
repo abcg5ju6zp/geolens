@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator, BinaryIO
 
@@ -23,22 +22,11 @@ from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient
 
 from app.core.async_io import run_in_thread_draining
-from app.platform.storage.provider import StoredObject
+from app.platform.storage.provider import StoredObject, as_utc
 
 
 # Resume points remembered per provider; a pass walks at most a few hundred pages.
 _MAX_RESUME_TOKENS = 512
-
-
-def _as_utc(value: datetime) -> datetime:
-    """Normalize a timestamp to timezone-aware UTC (feat #1249).
-
-    Azure already returns aware datetimes; this pins the ``StoredObject``
-    contract that reconciliation's cutoff comparison depends on.
-    """
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
 
 
 class AzureBlobStorageProvider:
@@ -311,7 +299,7 @@ class AzureBlobStorageProvider:
                 page.append(
                     StoredObject(
                         key=blob.name,
-                        last_modified=_as_utc(last_modified),
+                        last_modified=as_utc(last_modified),
                     )
                 )
             # A one-page listing has nothing to resume, and would evict the

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import asyncio
 from functools import partial
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator, BinaryIO
 
@@ -32,21 +31,10 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from app.core.async_io import run_in_thread_draining
-from app.platform.storage.provider import StoredObject
+from app.platform.storage.provider import StoredObject, as_utc
 
 # Matches LocalStorageProvider's chunk size.
 _STREAM_CHUNK_BYTES = 1024 * 1024
-
-
-def _as_utc(value: datetime) -> datetime:
-    """Normalize a timestamp to timezone-aware UTC (feat #1249).
-
-    botocore already returns aware datetimes; this pins the ``StoredObject``
-    contract that reconciliation's cutoff comparison depends on.
-    """
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
 
 
 def _endpoint_url(endpoint: str | None, allow_http: bool) -> str | None:
@@ -330,7 +318,7 @@ class S3StorageProvider:
             yield [
                 StoredObject(
                     key=obj["Key"],
-                    last_modified=_as_utc(obj["LastModified"]),
+                    last_modified=as_utc(obj["LastModified"]),
                 )
                 for obj in response.get("Contents", [])
             ]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import builtins
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator, BinaryIO, Protocol
 
@@ -259,3 +259,14 @@ def get_storage() -> StorageProvider:
             "Storage provider not initialized. Call init_storage() first."
         )
     return _storage
+
+
+def as_utc(value: datetime) -> datetime:
+    """Normalize a timestamp to timezone-aware UTC.
+
+    Providers may return naive datetimes; this pins the ``StoredObject``
+    contract that reconciliation's cutoff comparison depends on.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
