@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import stat
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -79,7 +80,9 @@ def _items(plan: dict) -> dict[str, dict]:
 
 
 def _validator() -> Draft202012Validator:
-    return Draft202012Validator(plan_mod.plan_schema(), format_checker=FormatChecker())
+    path = files("geolens_cli.manifest.schemas").joinpath("arcgis-migration-plan-v1.schema.json")
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    return Draft202012Validator(schema, format_checker=FormatChecker())
 
 
 def _related(by_kind: dict[tuple[str, str], list[dict]]):

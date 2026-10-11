@@ -285,15 +285,6 @@ def layer_summaries(preview: Any) -> list[dict[str, Any]]:
     return summaries
 
 
-def is_multi_layer(preview: Any) -> bool:
-    """True when the source file has more than one layer.
-
-    The backend only populates ``all_layers`` when the file has more than
-    one layer, so a non-empty list is itself the multi-layer signal.
-    """
-    return len(layer_summaries(preview)) > 0
-
-
 def _set(value: Any) -> Any:
     from geolens.types import Unset
 

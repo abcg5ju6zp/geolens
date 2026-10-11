@@ -68,19 +68,6 @@ class TestLayerSummaries:
         ]
 
 
-class TestIsMultiLayer:
-    def test_false_for_single_layer(self) -> None:
-        from geolens_cli.replace import is_multi_layer
-
-        assert is_multi_layer(SimpleNamespace(all_layers=None)) is False
-
-    def test_true_when_layers_present(self) -> None:
-        from geolens_cli.replace import is_multi_layer
-
-        item = SimpleNamespace(additional_properties={"name": "roads", "feature_count": 1})
-        assert is_multi_layer(SimpleNamespace(all_layers=[item])) is True
-
-
 class TestPreviewSummary:
     def test_selects_stable_fields(self) -> None:
         from geolens_cli.replace import preview_summary

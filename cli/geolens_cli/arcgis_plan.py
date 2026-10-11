@@ -12,7 +12,6 @@ import json
 import os
 from collections import Counter
 from collections.abc import Mapping
-from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +24,6 @@ from ._sdk_helpers import EXIT_GENERIC, EXIT_OK, EXIT_USAGE
 
 SCHEMA_VERSION = "1"
 PLAN_FILENAME = "arcgis-migration-plan.json"
-_SCHEMA_RESOURCE = "arcgis-migration-plan-v1.schema.json"
 _INVENTORY_VERSION = "2"
 
 IMPORT_LAYERS = "import_layers"
@@ -43,12 +41,6 @@ _ORDERING_ROLES_EXCLUDED = frozenset({"published_from"})
 
 class PlanError(Exception):
     """The inventory or owner map can't be turned into a plan."""
-
-
-def plan_schema() -> dict[str, Any]:
-    """Return the packaged plan JSON Schema."""
-    path = files("geolens_cli.manifest.schemas").joinpath(_SCHEMA_RESOURCE)
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _unread_dependencies(row: Mapping[str, Any]) -> bool:
