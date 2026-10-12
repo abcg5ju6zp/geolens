@@ -1172,7 +1172,7 @@ def test_decomposed_service_modules_stay_within_size_budgets() -> None:
     facade_line_budgets = {
         "backend/app/modules/catalog/maps/service.py": 104,
         "backend/app/modules/catalog/search/service.py": 80,
-        "backend/app/modules/catalog/datasets/domain/service.py": 112,
+        "backend/app/modules/catalog/datasets/domain/service.py": 137,
         "backend/app/processing/ai/chat_service.py": 519,
         "backend/app/platform/extensions/defaults.py": 75,
     }
@@ -1198,15 +1198,21 @@ def test_decomposed_service_modules_stay_within_size_budgets() -> None:
         # Internal pointer reads sit beside the detail query that shares them.
         "backend/app/modules/catalog/datasets/domain/service_query.py": 439,
         "backend/app/modules/catalog/datasets/domain/service_lifecycle.py": 513,
+        # Batch orchestration fixes requester/target set, idempotent replay and
+        # the per-batch claim/finish CAS in one service boundary.
+        "backend/app/modules/catalog/datasets/domain/service_retirement.py": 411,
+        # The per-item fence/quiesce/ordered-teardown/reap state machine owns
+        # one resume contract, including every terminal classification.
+        "backend/app/modules/catalog/datasets/domain/service_retirement_items.py": 580,
         # Chat splits retain tool execution and result-serialization workflows.
         "backend/app/processing/ai/chat_actions.py": 587,
         "backend/app/processing/ai/chat_geojson.py": 440,
         # Default adapters expose explicit extension contracts rather than catch-all shims.
         "backend/app/platform/extensions/defaults_ai_openai.py": 520,
         "backend/app/platform/extensions/defaults_ai_anthropic.py": 372,
-        "backend/app/platform/extensions/defaults_catalog_port.py": 579,
+        "backend/app/platform/extensions/defaults_catalog_port.py": 632,
         # ProcessingPort signatures remain explicit across the catalog boundary.
-        "backend/app/platform/extensions/defaults_processing_port.py": 576,
+        "backend/app/platform/extensions/defaults_processing_port.py": 597,
         "backend/app/platform/extensions/defaults_extensions.py": 433,
         "backend/app/modules/catalog/search/service_filters.py": 366,
     }
@@ -1298,7 +1304,7 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     "backend/app/core/db/tenant_adoption.py": 1258,
     # Application composition debt; preserve lifespan and middleware ordering when
     # splitting.
-    "backend/app/api/main.py": 1751,
+    "backend/app/api/main.py": 1772,
     # Map request validation and published response contracts share this module.
     "backend/app/modules/catalog/maps/schemas.py": 1396,
     # Metadata facade preserves the import and patch surface used by extensions and
@@ -1319,7 +1325,7 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # ArcGIS requests, lifecycle context, the quicklook draw that ingest and
     # replacement share, and the swap that keeps the replaced table and records
     # the version it keeps.
-    "backend/app/processing/ingest/tasks_common.py": 1903,
+    "backend/app/processing/ingest/tasks_common.py": 1906,
     # File and remote-source replacement strategies own retrieval, staging and
     # verification, including the live geometry read and its witness, the
     # live-edit comparison each publication makes, and a service re-upload's
@@ -1337,7 +1343,7 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     "backend/app/platform/jobs/sweep.py": 1803,
     # Refresh admission, claim fencing, terminal transitions and the job-scoped
     # abandoned-run sweep stay domain-neutral.
-    "backend/app/platform/refresh/service.py": 1174,
+    "backend/app/platform/refresh/service.py": 1228,
     # Central settings and boot-validation debt; split by configuration domain before
     # raising.
     "backend/app/core/config.py": 1502,
@@ -1349,10 +1355,10 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     "backend/app/processing/embeddings/backfill.py": 919,
     # Reupload preview, compatibility, the file and service review, and staged
     # commit share an endpoint lifecycle.
-    "backend/app/modules/catalog/datasets/api/router_reupload.py": 1610,
+    "backend/app/modules/catalog/datasets/api/router_reupload.py": 1617,
     # VRT creation and regeneration share publication, owed-object records and
     # superseded-object cleanup.
-    "backend/app/processing/ingest/tasks_vrt.py": 1650,
+    "backend/app/processing/ingest/tasks_vrt.py": 1661,
     # Raster replacement owns conversion, read-back and published-object cleanup.
     "backend/app/processing/ingest/tasks_raster_replace.py": 614,
     # File and remote-source imports own publication fencing, heartbeat phases
@@ -1379,7 +1385,7 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     "backend/app/modules/catalog/datasets/domain/schemas.py": 1803,
     # Analysis validation, bounded execution and fenced registration share one task
     # lifecycle.
-    "backend/app/processing/analysis/tasks.py": 1439,
+    "backend/app/processing/analysis/tasks.py": 1454,
     # Map endpoints share response assembly, visibility and ownership checks.
     "backend/app/modules/catalog/maps/router.py": 1537,
     # Native search and OGC Records share visibility, query parsing and pagination.

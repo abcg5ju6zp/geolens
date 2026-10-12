@@ -1425,6 +1425,17 @@ async def regenerate_vrt(
                             ),
                         )
                         raise
+                    # Retirement fence, read under the same row lock: a late
+                    # regeneration must not swap a new generation onto a VRT a
+                    # batch is retiring. The outer handler fails the job.
+                    from app.platform.retirement import (
+                        DatasetRetiringError,
+                        read_retirement_fence,
+                    )
+
+                    _vrt_fence = await read_retirement_fence(session, vrt_dataset.id)
+                    if _vrt_fence is not None and _vrt_fence[1] is not None:
+                        raise DatasetRetiringError
                     # fix(#1938): the budget ends with the wait it was sized
                     # for. The UPDATEs below sit outside lock_catalog_rows, so
                     # an expiry there would raise a bare DBAPIError.

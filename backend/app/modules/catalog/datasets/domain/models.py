@@ -436,6 +436,12 @@ class Dataset(Base):
             unique=True,
             postgresql_where=text("tenant_id IS NOT NULL"),
         ),
+        # Batch-retirement fence; mirrors migration 0082.
+        Index(
+            "ix_datasets_retiring_batch_id",
+            "retiring_batch_id",
+            postgresql_where=text("retiring_batch_id IS NOT NULL"),
+        ),
         {"schema": "catalog"},
     )
 
@@ -538,6 +544,17 @@ class Dataset(Base):
 
     # TSEAM-01 (Phase 1207): dormant tenant_id — nullable, no FK enforcement.
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+    # Batch-retirement fence. NULL retiring_batch_id: not retiring. Set under
+    # the dataset row lock when a retirement attempt begins and read by every
+    # asset-publication seam, so a late job refuses to rebuild deleted assets.
+    # The generation rolls once per attempt and is snapshotted by the item.
+    retirement_generation: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, server_default="0"
+    )
+    retiring_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -966,3 +983,12 @@ class DetachedRelation(Base):
     detached_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# Registered on Base.metadata through this import; the ORM definitions live in
+# their own module to keep this file on its layering size budget. The
+# ``import x as x`` form is the explicit re-export (also keeps F401 quiet).
+from app.modules.catalog.datasets.domain.retirement_models import (  # noqa: E402
+    DatasetRetirementBatch as DatasetRetirementBatch,
+    DatasetRetirementItem as DatasetRetirementItem,
+)

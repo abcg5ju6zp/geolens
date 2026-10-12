@@ -64,6 +64,22 @@ from app.modules.catalog.datasets.domain.service_relationships import (
     list_relationships_with_total,
     validate_relationship_columns,
 )
+from app.modules.catalog.datasets.domain.service_retirement import (
+    RetirementIdempotencyMismatch,
+    RetirementTarget,
+    batch_needs_drive,
+    claim_retirement_batch,
+    complete_retirement_batch_if_done,
+    create_retirement_batch,
+    enqueue_retirement_batch,
+    get_visible_batch,
+    list_visible_batches,
+    preview_retirement,
+    retry_retirement_batch,
+)
+from app.modules.catalog.datasets.domain.service_retirement_items import (
+    process_retirement_item,
+)
 
 __all__ = [
     "DatasetDeletion",
@@ -106,4 +122,16 @@ __all__ = [
     "run_analysis_preview",
     "update_attribute",
     "update_user_metadata",
+    "RetirementIdempotencyMismatch",
+    "RetirementTarget",
+    "batch_needs_drive",
+    "claim_retirement_batch",
+    "complete_retirement_batch_if_done",
+    "create_retirement_batch",
+    "enqueue_retirement_batch",
+    "get_visible_batch",
+    "list_visible_batches",
+    "preview_retirement",
+    "process_retirement_item",
+    "retry_retirement_batch",
 ]

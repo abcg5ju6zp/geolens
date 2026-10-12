@@ -31,6 +31,9 @@ from app.modules.catalog.datasets.api.router_pointcloud import (
 from app.modules.catalog.datasets.api.router_previous_version import (
     router as datasets_previous_version_router,
 )
+from app.modules.catalog.datasets.api.router_retirement import (
+    router as datasets_retirement_router,
+)
 from app.modules.catalog.datasets.api.router_refresh import (
     router as datasets_refresh_router,
 )
@@ -85,6 +88,8 @@ api_router.include_router(manifest_router)
 
 # Export must stay before dataset CRUD because /dcat conflicts with /{dataset_id}.
 api_router.include_router(datasets_export_router)
+# Static retirement-batch paths precede /{dataset_id} dataset CRUD routes.
+api_router.include_router(datasets_retirement_router)
 api_router.include_router(datasets_router)
 api_router.include_router(datasets_analysis_router)
 api_router.include_router(datasets_vrt_router)

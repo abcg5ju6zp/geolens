@@ -849,6 +849,11 @@ from app.platform.catalog_locks import (  # noqa: E402
     CatalogLockConflict,
     catalog_timeout_installed,
 )
+from app.platform.retirement import (  # noqa: E402
+    DATASET_RETIRING_CODE,
+    DATASET_RETIRING_MESSAGE,
+    DatasetRetiringError,
+)
 from app.modules.quota.service import (  # noqa: E402
     DatasetQuotaExceededError,
     StorageQuotaExceededError,
@@ -955,9 +960,25 @@ async def _database_error_handler(request: Request, exc: DBAPIError) -> JSONResp
     )
 
 
+async def _dataset_retiring_handler(
+    request: Request, exc: DatasetRetiringError
+) -> JSONResponse:
+    """Map a retirement-fenced admission to 409, from whatever door raised it."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content=ProblemDetail(
+            title="Dataset is being retired",
+            status=status.HTTP_409_CONFLICT,
+            detail={"code": DATASET_RETIRING_CODE, "message": str(exc) or DATASET_RETIRING_MESSAGE},
+        ).model_dump(),
+        media_type="application/problem+json",
+    )
+
+
 app.add_exception_handler(DatasetQuotaExceededError, _dataset_quota_handler)
 app.add_exception_handler(StorageQuotaExceededError, _storage_quota_handler)
 app.add_exception_handler(CatalogLockConflict, _catalog_lock_conflict_handler)
+app.add_exception_handler(DatasetRetiringError, _dataset_retiring_handler)
 app.add_exception_handler(DBAPIError, _database_error_handler)
 
 # fix(#1770): registered FIRST so it ends up INNERMOST (add_middleware

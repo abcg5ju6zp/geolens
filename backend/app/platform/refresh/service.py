@@ -29,6 +29,7 @@ from app.core.failure_reason import FixedReason, redact_failure_reason
 from app.platform.jobs import ledger
 from app.platform.jobs.ledger import Outcome, hold
 from app.platform.refresh.models import DatasetRefreshRun
+from app.platform.retirement import DatasetRetiringError
 
 logger = structlog.get_logger(__name__)
 
@@ -383,13 +384,19 @@ async def create_pending_run(
     parent = (
         await session.execute(
             text(
-                "SELECT tenant_id, data_revision FROM catalog.datasets "
-                "WHERE id = :dataset_id"
+                "SELECT tenant_id, data_revision, retiring_batch_id "
+                "FROM catalog.datasets WHERE id = :dataset_id"
             ),
             {"dataset_id": dataset_id},
         )
     ).one_or_none()
-    tenant_id, data_revision = parent if parent is not None else (None, None)
+    if parent is not None and parent[2] is not None:
+        # One door for every replacement/refresh/restore admission: a dataset
+        # fenced by a retirement batch accepts no new mutating runs.
+        raise DatasetRetiringError()
+    tenant_id, data_revision = (
+        (parent[0], parent[1]) if parent is not None else (None, None)
+    )
 
     # A reupload queued by an API pod older than run admission (pre-migration,
     # or a manifest apply from before it created runs) has a live task but no
@@ -807,6 +814,53 @@ async def cancel_active_run_for_job(
     await _release_consumed_acceptances(session, [run_id])
     await _emit_refresh_cancelled(session, run_id, cancelled_by=cancelled_by)
     return run_id
+
+
+async def cancel_active_runs_for_dataset(
+    session: AsyncSession,
+    dataset_id: uuid.UUID,
+    *,
+    cancelled_by: uuid.UUID | None = None,
+) -> list[uuid.UUID]:
+    """Cancel every active refresh run for a dataset (retirement quiesce).
+
+    Covers runs without a live bound ingest job (scheduled/manual admission);
+    runs bound to a job the caller just cancelled were already ended by the
+    ledger's linked-run hook, and their transition CAS is a no-op here.
+    Returns the run ids this call actually ended. Does not commit.
+    """
+    run_ids = list(
+        (
+            await session.execute(
+                select(DatasetRefreshRun.id)
+                .where(
+                    DatasetRefreshRun.dataset_id == dataset_id,
+                    DatasetRefreshRun.status.in_(ACTIVE_RUN_STATUSES),
+                )
+                .with_for_update()
+            )
+        ).scalars()
+    )
+    ended: list[uuid.UUID] = []
+    for run_id in run_ids:
+        won = await transition_run(
+            session,
+            run_id,
+            expected=ACTIVE_RUN_STATUSES,
+            to="cancelled",
+            values={
+                "finished_at": datetime.now(timezone.utc),
+                "error_code": USER_CANCELLED_ERROR_CODE,
+                "error_message": redact_run_error(USER_CANCELLED_ERROR_MESSAGE),
+            },
+        )
+        if won:
+            ended.append(run_id)
+    if ended:
+        await _release_consumed_acceptances(session, ended)
+        for run_id in ended:
+            await _emit_refresh_cancelled(session, run_id, cancelled_by=cancelled_by)
+    return ended
 
 
 def project_refresh_success(

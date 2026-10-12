@@ -8951,6 +8951,275 @@ export type RestorePreviousVersionResponse = {
 };
 
 /**
+ * RetirementBatchCreateRequest
+ */
+export type RetirementBatchCreateRequest = {
+    /**
+     * Datasets
+     *
+     * 1-100 datasets to retire
+     */
+    datasets: Array<RetirementTarget>;
+};
+
+/**
+ * RetirementBatchListResponse
+ */
+export type RetirementBatchListResponse = {
+    /**
+     * Items
+     */
+    items: Array<RetirementBatchSummary>;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * RetirementBatchResponse
+ */
+export type RetirementBatchResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Completed Count
+     */
+    completed_count: number;
+    /**
+     * Conflict Count
+     */
+    conflict_count: number;
+    /**
+     * Retryable Count
+     */
+    retryable_count: number;
+    /**
+     * Rejected Count
+     */
+    rejected_count: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Started At
+     */
+    started_at?: string | null;
+    /**
+     * Heartbeat At
+     */
+    heartbeat_at?: string | null;
+    /**
+     * Finished At
+     */
+    finished_at?: string | null;
+    /**
+     * Items
+     */
+    items: Array<RetirementItemOutcome>;
+};
+
+/**
+ * RetirementBatchSummary
+ */
+export type RetirementBatchSummary = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Completed Count
+     */
+    completed_count: number;
+    /**
+     * Conflict Count
+     */
+    conflict_count: number;
+    /**
+     * Retryable Count
+     */
+    retryable_count: number;
+    /**
+     * Rejected Count
+     */
+    rejected_count: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Started At
+     */
+    started_at?: string | null;
+    /**
+     * Finished At
+     */
+    finished_at?: string | null;
+};
+
+/**
+ * RetirementItemOutcome
+ */
+export type RetirementItemOutcome = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Stage
+     */
+    stage?: string | null;
+    /**
+     * Attempts
+     */
+    attempts: number;
+    /**
+     * Code
+     */
+    code?: string | null;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Dependents
+     */
+    dependents?: Array<{
+        [key: string]: unknown;
+    }> | null;
+    /**
+     * Table Name
+     */
+    table_name?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Finished At
+     */
+    finished_at?: string | null;
+};
+
+/**
+ * RetirementPreviewItem
+ */
+export type RetirementPreviewItem = {
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Found
+     */
+    found: boolean;
+    /**
+     * Writable
+     */
+    writable: boolean;
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Title Matches
+     */
+    title_matches: boolean;
+    /**
+     * Active Jobs
+     */
+    active_jobs: number;
+    /**
+     * Active Refresh Runs
+     */
+    active_refresh_runs: number;
+    /**
+     * Map Layers
+     */
+    map_layers: number;
+    /**
+     * Vrt Dependents
+     */
+    vrt_dependents: Array<string>;
+};
+
+/**
+ * RetirementPreviewRequest
+ */
+export type RetirementPreviewRequest = {
+    /**
+     * Datasets
+     */
+    datasets: Array<RetirementTarget>;
+};
+
+/**
+ * RetirementPreviewResponse
+ */
+export type RetirementPreviewResponse = {
+    /**
+     * Items
+     */
+    items: Array<RetirementPreviewItem>;
+};
+
+/**
+ * RetirementRetryResponse
+ */
+export type RetirementRetryResponse = {
+    /**
+     * Reopened
+     */
+    reopened: number;
+    batch: RetirementBatchResponse;
+};
+
+/**
+ * RetirementTarget
+ */
+export type RetirementTarget = {
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Confirm Title
+     */
+    confirm_title: string;
+};
+
+/**
  * ReuploadCommitRequest
  */
 export type ReuploadCommitRequest = {
@@ -17942,6 +18211,316 @@ export type DeleteDatasetRelationshipDatasetsRelationshipsRelationshipIdDeleteRe
 };
 
 export type DeleteDatasetRelationshipDatasetsRelationshipsRelationshipIdDeleteResponse = DeleteDatasetRelationshipDatasetsRelationshipsRelationshipIdDeleteResponses[keyof DeleteDatasetRelationshipDatasetsRelationshipsRelationshipIdDeleteResponses];
+
+export type ListRetirementBatchesEndpointDatasetsRetirementBatchesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/datasets/retirement-batches/';
+};
+
+export type ListRetirementBatchesEndpointDatasetsRetirementBatchesGetErrors = {
+    /**
+     * Bad request — invalid payload
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized — missing or invalid credentials
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden — caller lacks write access
+     */
+    403: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict — resource state prevents the operation
+     */
+    409: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type ListRetirementBatchesEndpointDatasetsRetirementBatchesGetError = ListRetirementBatchesEndpointDatasetsRetirementBatchesGetErrors[keyof ListRetirementBatchesEndpointDatasetsRetirementBatchesGetErrors];
+
+export type ListRetirementBatchesEndpointDatasetsRetirementBatchesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RetirementBatchListResponse;
+};
+
+export type ListRetirementBatchesEndpointDatasetsRetirementBatchesGetResponse = ListRetirementBatchesEndpointDatasetsRetirementBatchesGetResponses[keyof ListRetirementBatchesEndpointDatasetsRetirementBatchesGetResponses];
+
+export type CreateRetirementBatchEndpointDatasetsRetirementBatchesPostData = {
+    body: RetirementBatchCreateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         */
+        'idempotency-key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/datasets/retirement-batches/';
+};
+
+export type CreateRetirementBatchEndpointDatasetsRetirementBatchesPostErrors = {
+    /**
+     * Bad request — invalid payload
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized — missing or invalid credentials
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden — caller lacks write access
+     */
+    403: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict — resource state prevents the operation
+     */
+    409: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type CreateRetirementBatchEndpointDatasetsRetirementBatchesPostError = CreateRetirementBatchEndpointDatasetsRetirementBatchesPostErrors[keyof CreateRetirementBatchEndpointDatasetsRetirementBatchesPostErrors];
+
+export type CreateRetirementBatchEndpointDatasetsRetirementBatchesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: RetirementBatchResponse;
+};
+
+export type CreateRetirementBatchEndpointDatasetsRetirementBatchesPostResponse = CreateRetirementBatchEndpointDatasetsRetirementBatchesPostResponses[keyof CreateRetirementBatchEndpointDatasetsRetirementBatchesPostResponses];
+
+export type PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostData = {
+    body: RetirementPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/datasets/retirement-batches/preview/';
+};
+
+export type PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostErrors = {
+    /**
+     * Bad request — invalid payload
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized — missing or invalid credentials
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden — caller lacks write access
+     */
+    403: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict — resource state prevents the operation
+     */
+    409: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostError = PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostErrors[keyof PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostErrors];
+
+export type PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: RetirementPreviewResponse;
+};
+
+export type PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostResponse = PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostResponses[keyof PreviewRetirementBatchDatasetsRetirementBatchesPreviewPostResponses];
+
+export type GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Batch Id
+         */
+        batch_id: string;
+    };
+    query?: never;
+    url: '/datasets/retirement-batches/{batch_id}/';
+};
+
+export type GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetErrors = {
+    /**
+     * Bad request — invalid payload
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized — missing or invalid credentials
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden — caller lacks write access
+     */
+    403: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict — resource state prevents the operation
+     */
+    409: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetError = GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetErrors[keyof GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetErrors];
+
+export type GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RetirementBatchResponse;
+};
+
+export type GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetResponse = GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetResponses[keyof GetRetirementBatchEndpointDatasetsRetirementBatchesBatchIdGetResponses];
+
+export type RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostData = {
+    body?: never;
+    path: {
+        /**
+         * Batch Id
+         */
+        batch_id: string;
+    };
+    query?: never;
+    url: '/datasets/retirement-batches/{batch_id}/retry/';
+};
+
+export type RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostErrors = {
+    /**
+     * Bad request — invalid payload
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized — missing or invalid credentials
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden — caller lacks write access
+     */
+    403: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict — resource state prevents the operation
+     */
+    409: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostError = RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostErrors[keyof RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostErrors];
+
+export type RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: RetirementRetryResponse;
+};
+
+export type RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostResponse = RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostResponses[keyof RetryRetirementBatchEndpointDatasetsRetirementBatchesBatchIdRetryPostResponses];
 
 export type DeleteDatasetEndpointDatasetsDatasetIdDeleteData = {
     body: DatasetDeleteRequest;

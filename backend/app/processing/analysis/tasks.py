@@ -1060,6 +1060,18 @@ def _build_materialize_select(
     )
 
 
+async def _assert_source_not_retiring(session: AsyncSession, dataset_id: str) -> None:
+    """Refuse to materialize against a dataset fenced by retirement."""
+    from app.platform.retirement import (
+        DatasetRetiringError,
+        read_retirement_fence,
+    )
+
+    fence = await read_retirement_fence(session, uuid.UUID(dataset_id))
+    if fence is not None and fence[1] is not None:
+        raise DatasetRetiringError
+
+
 async def _materialize(
     *,
     job_id: str,
@@ -1137,6 +1149,9 @@ async def _materialize(
                 raise ValueError("Source dataset not found")
             if not _SAFE_TABLE.match(src.table_name):
                 raise ValueError("Invalid source table name")
+            # Retirement fence: an analysis admitted before the batch fenced
+            # its source must stop here, before building any output assets.
+            await _assert_source_not_retiring(session, dataset_id)
             if by_field is not None:
                 if not _SAFE_IDENT.match(by_field):
                     raise ValueError("Invalid dissolve column name")

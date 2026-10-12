@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, TypeVar
+
+from attrs import define as _attrs_define
+from attrs import field as _attrs_field
+
+
+from uuid import UUID
+
+
+T = TypeVar("T", bound="RetirementTarget")
+
+
+@_attrs_define
+class RetirementTarget:
+    """
+    Attributes:
+        dataset_id (UUID):
+        confirm_title (str):
+    """
+
+    dataset_id: UUID
+    confirm_title: str
+    additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        dataset_id = str(self.dataset_id)
+
+        confirm_title = self.confirm_title
+
+        field_dict: dict[str, Any] = {}
+        field_dict.update(self.additional_properties)
+        field_dict.update(
+            {
+                "dataset_id": dataset_id,
+                "confirm_title": confirm_title,
+            }
+        )
+
+        return field_dict
+
+    @classmethod
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        d = dict(src_dict)
+        dataset_id = UUID(d.pop("dataset_id"))
+
+        confirm_title = d.pop("confirm_title")
+
+        retirement_target = cls(
+            dataset_id=dataset_id,
+            confirm_title=confirm_title,
+        )
+
+        retirement_target.additional_properties = d
+        return retirement_target
+
+    @property
+    def additional_keys(self) -> list[str]:
+        return list(self.additional_properties.keys())
+
+    def __getitem__(self, key: str) -> Any:
+        return self.additional_properties[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.additional_properties[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self.additional_properties[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.additional_properties

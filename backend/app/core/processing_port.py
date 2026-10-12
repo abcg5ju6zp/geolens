@@ -450,3 +450,17 @@ class ProcessingPort(Protocol):
     async def get_dataset_with_attributes(
         self, session: AsyncSession, dataset_id: uuid.UUID
     ) -> DatasetProtocol | None: ...
+
+    # Batch dataset retirement driver steps; the catalog domain owns the
+    # state machine, the processing worker owns the loop and heartbeat.
+    async def retirement_claim_batch(
+        self, session: AsyncSession, batch_id: uuid.UUID
+    ) -> bool: ...
+
+    async def retirement_process_item(
+        self, session: AsyncSession, batch_id: uuid.UUID
+    ) -> dict[str, Any] | None: ...
+
+    async def retirement_finish_batch(
+        self, session: AsyncSession, batch_id: uuid.UUID
+    ) -> None: ...

@@ -680,6 +680,19 @@ from .reserved_rename_detail import ReservedRenameDetail
 from .reserved_rename_warning import ReservedRenameWarning
 from .restore_previous_version_request import RestorePreviousVersionRequest
 from .restore_previous_version_response import RestorePreviousVersionResponse
+from .retirement_batch_create_request import RetirementBatchCreateRequest
+from .retirement_batch_list_response import RetirementBatchListResponse
+from .retirement_batch_response import RetirementBatchResponse
+from .retirement_batch_summary import RetirementBatchSummary
+from .retirement_item_outcome import RetirementItemOutcome
+from .retirement_item_outcome_dependents_type_0_item import (
+    RetirementItemOutcomeDependentsType0Item,
+)
+from .retirement_preview_item import RetirementPreviewItem
+from .retirement_preview_request import RetirementPreviewRequest
+from .retirement_preview_response import RetirementPreviewResponse
+from .retirement_retry_response import RetirementRetryResponse
+from .retirement_target import RetirementTarget
 from .reupload_commit_request import ReuploadCommitRequest
 from .reupload_commit_request_expected_origin_kind_type_0 import (
     ReuploadCommitRequestExpectedOriginKindType0,
@@ -1334,6 +1347,17 @@ __all__ = (
     "ReservedRenameWarning",
     "RestorePreviousVersionRequest",
     "RestorePreviousVersionResponse",
+    "RetirementBatchCreateRequest",
+    "RetirementBatchListResponse",
+    "RetirementBatchResponse",
+    "RetirementBatchSummary",
+    "RetirementItemOutcome",
+    "RetirementItemOutcomeDependentsType0Item",
+    "RetirementPreviewItem",
+    "RetirementPreviewRequest",
+    "RetirementPreviewResponse",
+    "RetirementRetryResponse",
+    "RetirementTarget",
     "ReuploadCommitRequest",
     "ReuploadCommitRequestExpectedOriginKindType0",
     "ReuploadCommitResponse",

@@ -289,6 +289,59 @@ class DefaultCatalogPort:
 
         return regenerate_vrt
 
+    def retirement_batch_task(self):  # type: ignore[no-untyped-def]
+        from app.processing.retirement.tasks import run_dataset_retirement_batch
+
+        return run_dataset_retirement_batch
+
+    async def abort_live_jobs_for_dataset(  # type: ignore[no-untyped-def]
+        self, session, dataset_id
+    ):
+        """Best-effort Procrastinate cancel/abort of a dataset's live jobs.
+
+        The durable cancel is the ingest-job status CAS; this only accelerates
+        it, mirroring the jobs cancel endpoint. Any failure is logged, never
+        raised: the quiesce poll is what actually gates retirement.
+        """
+        import structlog
+
+        from sqlalchemy import text
+
+        log = structlog.get_logger(__name__)
+        try:
+            rows = await session.execute(
+                text(
+                    "SELECT pj.id FROM catalog.procrastinate_jobs pj "
+                    "JOIN catalog.ingest_jobs j "
+                    "ON pj.args->>'job_id' = j.id::text "
+                    "WHERE j.dataset_id = :dataset_id "
+                    "AND pj.status IN ('todo', 'doing')"
+                ),
+                {"dataset_id": dataset_id},
+            )
+            queue_job_ids = list(rows.scalars())
+        except Exception:  # broad: queue lookup is acceleration, never the guarantee
+            log.warning(
+                "retirement_queue_lookup_failed",
+                dataset_id=str(dataset_id),
+                exc_info=True,
+            )
+            return
+        for queue_job_id in queue_job_ids:
+            try:
+                from app.processing.ingest.tasks_common import task_app
+
+                await task_app.job_manager.cancel_job_by_id_async(
+                    queue_job_id, abort=True
+                )
+            except Exception:  # broad: queue abort is acceleration, never the guarantee
+                log.warning(
+                    "retirement_queue_abort_failed",
+                    dataset_id=str(dataset_id),
+                    queue_job_id=queue_job_id,
+                    exc_info=True,
+                )
+
     def ingest_part_size(self) -> int:
         # fix(#836): moved off the router — platform code must never import
         # an API-edge module (route registration runs at import time).

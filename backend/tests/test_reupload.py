@@ -60,6 +60,7 @@ async def test_reupload_commit_failure_cleans_owned_staged_file(tmp_path):
     with (
         patch.object(router_reupload, "get_dataset", AsyncMock(return_value=dataset)),
         patch.object(router_reupload, "check_dataset_write_access", AsyncMock()),
+        patch.object(router_reupload, "assert_dataset_not_retiring", AsyncMock()),
         patch.object(
             router_reupload,
             "get_allowed_extensions_list",
@@ -1112,6 +1113,10 @@ class TestServiceReuploadPreview:
 
         with (
             patch(
+                "app.modules.catalog.datasets.api.router_reupload.validate_url_for_ssrf",
+                new_callable=AsyncMock,
+            ),
+            patch(
                 "app.modules.catalog.datasets.api.router_reupload.build_gdal_source"
             ) as mock_build_source,
             patch(
@@ -1221,6 +1226,10 @@ class TestServiceReuploadPreview:
         dataset = await _create_dataset(test_db_session, created_by=admin_id)
 
         with (
+            patch(
+                "app.modules.catalog.datasets.api.router_reupload.validate_url_for_ssrf",
+                new_callable=AsyncMock,
+            ),
             patch(
                 "app.modules.catalog.datasets.api.router_reupload.build_gdal_source"
             ) as mock_build_source,

@@ -66,6 +66,7 @@ from app.platform.refresh.credentials import (
 )
 from app.platform.refresh import verification as refresh_policy
 from app.platform.refresh.service import DatasetBusyError, create_pending_run
+from app.platform.retirement import assert_dataset_not_retiring
 from app.platform.column_names import stored_column_names
 from app.platform.dataset_origin import classify_origin
 from app.platform.extensions import get_catalog_port
@@ -395,6 +396,7 @@ async def reupload_dataset(
             detail="Dataset not found",
         )
     await check_dataset_write_access(db, dataset, dataset_id, user)
+    await assert_dataset_not_retiring(db, dataset_id)
 
     _assert_compatible_record_type(dataset, file.filename)
 
@@ -518,6 +520,7 @@ async def reupload_service_preview(
             detail="Dataset not found",
         )
     await check_dataset_write_access(db, dataset, dataset_id, user)
+    await assert_dataset_not_retiring(db, dataset_id)
 
     # IA-P1-02: surface cross-record-type swaps as a useful 400 before the
     # pipeline executes (vector→raster or any→VRT explodes deep otherwise).
@@ -667,6 +670,7 @@ async def reupload_preview(
             detail="Dataset not found",
         )
     await check_dataset_write_access(db, dataset, dataset_id, user)
+    await assert_dataset_not_retiring(db, dataset_id)
     _assert_compatible_record_type(dataset, None)
     # feat(#1221): this endpoint's whole output is a schema diff, and a raster
     # has no attribute schema — the ogrinfo call below would fail on a GeoTIFF
@@ -1072,6 +1076,7 @@ async def reupload_commit(
             detail="Dataset not found",
         )
     await check_dataset_write_access(db, dataset, dataset_id, user)
+    await assert_dataset_not_retiring(db, dataset_id)
     _assert_compatible_record_type(dataset, None)
 
     job = await _get_bound_reupload_job_or_404(
@@ -1284,6 +1289,7 @@ async def request_presigned_reupload(
             detail="Dataset not found",
         )
     await check_dataset_write_access(db, dataset, dataset_id, user)
+    await assert_dataset_not_retiring(db, dataset_id)
 
     _assert_compatible_record_type(dataset, request.filename)
 
@@ -1482,6 +1488,7 @@ async def complete_presigned_reupload(
             detail="Dataset not found",
         )
     await check_dataset_write_access(db, dataset, dataset_id, user)
+    await assert_dataset_not_retiring(db, dataset_id)
     _assert_compatible_record_type(dataset, None)
 
     job = await _get_bound_reupload_job_or_404(

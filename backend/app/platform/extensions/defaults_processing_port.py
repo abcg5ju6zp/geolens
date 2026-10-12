@@ -574,3 +574,24 @@ class DefaultProcessingPort:
         )
         result = await session.execute(stmt)
         return result.unique().scalar_one_or_none()
+
+    async def retirement_claim_batch(self, session, batch_id):  # type: ignore[no-untyped-def]
+        from app.modules.catalog.datasets.domain.service import (
+            claim_retirement_batch,
+        )
+
+        return await claim_retirement_batch(session, batch_id)
+
+    async def retirement_process_item(self, session, batch_id):  # type: ignore[no-untyped-def]
+        from app.modules.catalog.datasets.domain.service import (
+            process_retirement_item,
+        )
+
+        return await process_retirement_item(session, batch_id)
+
+    async def retirement_finish_batch(self, session, batch_id):  # type: ignore[no-untyped-def]
+        from app.modules.catalog.datasets.domain.service import (
+            complete_retirement_batch_if_done,
+        )
+
+        return await complete_retirement_batch_if_done(session, batch_id)

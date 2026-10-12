@@ -52,6 +52,7 @@ from app.platform.jobs.heartbeat import (
     ANALYSIS_MATERIALIZE_LEASE_SECONDS as MATERIALIZE_LEASE_SECONDS,
 )
 from app.platform.jobs.models import IngestJob
+from app.platform.retirement import assert_dataset_not_retiring
 from app.platform.sandbox.schemas import SandboxError
 from app.standards.ogc.errors import ERROR_RESPONSES_WRITE
 
@@ -498,6 +499,9 @@ async def analysis_materialize_endpoint(
     ``GET /jobs/{job_id}`` for progress.
     """
     dataset = await _load_vector_dataset(db, dataset_id, user)
+    # A retiring dataset accepts no new analyses; the worker fence is the
+    # backstop for a job admitted just before the batch was fenced.
+    await assert_dataset_not_retiring(db, dataset_id)
     source_filter = await _compile_filter(
         db, dataset, body.filter, bind_prefix="src_filter"
     )

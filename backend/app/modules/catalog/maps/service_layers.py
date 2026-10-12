@@ -25,6 +25,7 @@ from app.modules.catalog.maps.service_shared import (
     get_dataset_meta,
     normalize_dem_style_config,
 )
+from app.platform.retirement import assert_dataset_not_retiring
 
 
 async def bulk_check_dataset_access(
@@ -154,6 +155,9 @@ async def add_layer(
 
     Raises 422 when the map is at its layer limit. Does NOT commit.
     """
+    # A retiring dataset accepts no new map bindings. A missing dataset is
+    # left to the existing unknown-layer path below.
+    await assert_dataset_not_retiring(session, body.dataset_id)
     meta = await get_dataset_meta(session, body.dataset_id)
     record_type = meta.record_type if meta else None
     geometry_type = meta.geometry_type if meta else None

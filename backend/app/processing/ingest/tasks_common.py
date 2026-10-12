@@ -243,6 +243,9 @@ task_app = App(
         # modules/admin/ because it emits the run's audit events, which
         # processing/ may not import; this list is how the worker finds it.
         "app.modules.admin.backfill_jobs",
+        # Durable batch dataset retirement driver; the task is thin and
+        # reaches the catalog state machine through ProcessingPort.
+        "app.processing.retirement.tasks",
     ],
 )
 

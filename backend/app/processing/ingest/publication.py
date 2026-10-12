@@ -48,6 +48,10 @@ from app.platform.refresh.service import (
     record_refresh_failure,
     record_refresh_success,
 )
+from app.platform.retirement import (
+    DatasetRetiringError,
+    read_retirement_fence,
+)
 from app.processing.ingest.publish_followups import (
     owed_followups,
     run_publish_followups,
@@ -159,6 +163,18 @@ _DATASET_DELETED = Failure(
     notify=False,
     reason=FixedReason(
         "The dataset was deleted while this job was running.", code="dataset_deleted"
+    ),
+)
+
+# A retirement batch fenced the dataset while this attempt ran. The attempt is
+# refused, not swapped: a late publication must not rebuild deleted assets.
+_DATASET_RETIRING = Failure(
+    "dataset_retiring",
+    notify=False,
+    refused=True,
+    reason=FixedReason(
+        "The dataset is being retired, so this job could not publish.",
+        code="dataset_retiring",
     ),
 )
 
@@ -369,11 +385,12 @@ async def settle_replacement(
         failed = await _publish(strategy, attempt)
     except Exception as exc:  # broad: every failure before the commit is recorded once
         failed = True
-        failure = (
-            _DATASET_DELETED
-            if isinstance(exc, DatasetDeleted)
-            else strategy.classify(exc)
-        )
+        if isinstance(exc, DatasetDeleted):
+            failure = _DATASET_DELETED
+        elif isinstance(exc, DatasetRetiringError):
+            failure = _DATASET_RETIRING
+        else:
+            failure = strategy.classify(exc)
         logger.exception("Ingest task failed", job_id=job_id, task=strategy.task)
         await _record_failure(strategy.task, attempt, exc, failure)
         if failure.refused:
@@ -587,6 +604,13 @@ async def _take_catalog_rows(
                 lock_timeout=None,
                 raster_asset_cls=raster_asset_cls,
             )
+            # Read UNDER the row lock: a retirement batch fencing this same
+            # row serializes here. A retiring dataset refuses the swap, so a
+            # job still in flight when the batch quiesces cannot republish the
+            # assets the batch is about to delete.
+            fence = await read_retirement_fence(session, dataset.id)
+            if fence is not None and fence[1] is not None:
+                raise DatasetRetiringError
     except CatalogLockConflict as conflict:
         event, hint, code = lock_conflict_report(
             conflict, event_prefix=strategy.catalog_event
