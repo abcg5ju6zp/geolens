@@ -280,10 +280,13 @@ async def live_property_columns(db: AsyncSession, table_name: str) -> str:
     schema = tenant_data_schema(current_tenant_var.get())
     result = await db.execute(
         text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_schema = :schema AND table_name = :tn "
-            "AND column_name NOT IN ('gid', 'geom', 'geom_4326') "
-            "ORDER BY ordinal_position"
+            "SELECT a.attname FROM pg_attribute a "
+            "JOIN pg_class c ON c.oid = a.attrelid "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = :schema AND c.relname = :tn "
+            "AND c.relkind IN ('r', 'p', 'v', 'm', 'f') "
+            "AND a.attnum > 0 AND NOT a.attisdropped "
+            "AND a.attname NOT IN ('gid', 'geom', 'geom_4326') ORDER BY a.attnum"
         ).bindparams(schema=schema, tn=table_name)
     )
     return ", ".join(

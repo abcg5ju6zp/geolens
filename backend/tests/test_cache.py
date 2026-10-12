@@ -56,6 +56,26 @@ async def test_memory_lru_bound_evicts_coldest():
 
 
 @pytest.mark.asyncio
+async def test_memory_byte_budget_evicts_coldest():
+    cache = InMemoryCacheProvider(max_bytes=250)
+    for i in range(3):
+        await cache.set(f"k{i}", "x" * 100, ttl=60)
+    assert await cache.get("k0") is None
+    assert await cache.get("k1") == "x" * 100
+    assert await cache.get("k2") == "x" * 100
+
+
+@pytest.mark.asyncio
+async def test_memory_skips_oversized_value_and_drops_the_stale_one():
+    cache = InMemoryCacheProvider(max_bytes=250)
+    await cache.set("k", "small", ttl=60)
+    await cache.set("k", "x" * 500, ttl=60)
+    assert await cache.get("k") is None
+    assert cache._bytes == 0
+    assert await cache.set_if_absent("k", "x" * 500, ttl=60) is False
+
+
+@pytest.mark.asyncio
 async def test_memory_delete():
     cache = InMemoryCacheProvider()
     await cache.set("key1", "val")

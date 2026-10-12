@@ -95,7 +95,6 @@ from app.modules.catalog.features.service import (
     replace_feature,
     update_feature,
 )
-from app.platform.cache.provider import get_tile_cache
 from app.standards.ogc.errors import ERROR_RESPONSES_AUTH, ERROR_RESPONSES_WRITE
 from app.standards.ogc.utils import build_url
 from app.core.public_urls import get_public_api_url
@@ -402,11 +401,6 @@ async def _finish_repeat(
     # Ends the transaction, so the locks go before the answer does.
     await db.commit()
 
-    # The attempt that wrote the feature may have died after its commit and
-    # before invalidating tiles.
-    tile_cache = get_tile_cache()
-    if tile_cache is not None:
-        await tile_cache.invalidate_table(dataset.table_name)
     return _created_feature_response(repeat.row, tile_version, table_oid)
 
 
@@ -981,11 +975,6 @@ async def create_feature(
     tile_version = await record_live_data_write(db, dataset)
     await db.commit()
 
-    # Invalidate cached tiles so the new feature appears immediately
-    tile_cache = get_tile_cache()
-    if tile_cache is not None:
-        await tile_cache.invalidate_table(dataset.table_name)
-
     logger.info(
         "feature.insert",
         dataset_id=str(dataset_id),
@@ -1098,11 +1087,6 @@ async def replace_single_feature(
     )
     tile_version = await record_live_data_write(db, dataset)
     await db.commit()
-
-    # Invalidate cached tiles so the replaced feature renders correctly
-    tile_cache = get_tile_cache()
-    if tile_cache is not None:
-        await tile_cache.invalidate_table(dataset.table_name)
 
     feature = GeoJSONFeatureWrite(
         id=row["gid"],
@@ -1224,11 +1208,6 @@ async def patch_single_feature(
     tile_version = await record_live_data_write(db, dataset)
     await db.commit()
 
-    # Invalidate cached tiles so the updated feature renders correctly
-    tile_cache = get_tile_cache()
-    if tile_cache is not None:
-        await tile_cache.invalidate_table(dataset.table_name)
-
     feature = GeoJSONFeatureWrite(
         id=row["gid"],
         geometry=row["geometry"],
@@ -1325,11 +1304,6 @@ async def delete_single_feature(
     )
     tile_version = await record_live_data_write(db, dataset)
     await db.commit()
-
-    # Invalidate cached tiles so the deleted feature disappears immediately
-    tile_cache = get_tile_cache()
-    if tile_cache is not None:
-        await tile_cache.invalidate_table(dataset.table_name)
 
     logger.info(
         "feature.delete",

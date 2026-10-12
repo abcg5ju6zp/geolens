@@ -9,6 +9,7 @@ PERF-11 — tile_cache_hits / tile_cache_misses counters carry a `table_name`
 import pytest
 
 from app.platform.cache.tile_cache import (
+    _TILE_ENTRY_OVERHEAD_BYTES,
     InMemoryTileCacheProvider,
     _SAFE_TABLE_RE,
     _safe_label,
@@ -52,20 +53,20 @@ def test_safe_table_re_anchors_pattern():
 
 @pytest.mark.asyncio
 async def test_in_memory_tile_cache_set_then_get_returns_bytes():
-    cache = InMemoryTileCacheProvider(max_entries=10)
+    cache = InMemoryTileCacheProvider()
     await cache.set("foo", 0, 0, 0, b"tile-bytes", ttl=300)
     assert await cache.get("foo", 0, 0, 0) == b"tile-bytes"
 
 
 @pytest.mark.asyncio
 async def test_in_memory_tile_cache_miss_returns_none():
-    cache = InMemoryTileCacheProvider(max_entries=10)
+    cache = InMemoryTileCacheProvider()
     assert await cache.get("never-set", 0, 0, 0) is None
 
 
 @pytest.mark.asyncio
 async def test_in_memory_tile_cache_lru_eviction():
-    cache = InMemoryTileCacheProvider(max_entries=2)
+    cache = InMemoryTileCacheProvider(max_bytes=2 * (1 + _TILE_ENTRY_OVERHEAD_BYTES))
     await cache.set("a", 0, 0, 0, b"A", ttl=300)
     await cache.set("b", 0, 0, 0, b"B", ttl=300)
     # touch 'a' so 'b' becomes least-recently-used
@@ -77,8 +78,25 @@ async def test_in_memory_tile_cache_lru_eviction():
 
 
 @pytest.mark.asyncio
+async def test_in_memory_tile_cache_is_bounded_by_bytes_not_count():
+    cache = InMemoryTileCacheProvider(max_bytes=3 * (1000 + _TILE_ENTRY_OVERHEAD_BYTES))
+    for name in "abcd":
+        await cache.set(name, 0, 0, 0, name.encode() * 1000, ttl=300)
+    assert await cache.get("a", 0, 0, 0) is None  # evicted to stay in budget
+    for name in "bcd":
+        assert await cache.get(name, 0, 0, 0) == name.encode() * 1000
+
+
+@pytest.mark.asyncio
+async def test_in_memory_tile_cache_skips_a_tile_larger_than_the_budget():
+    cache = InMemoryTileCacheProvider(max_bytes=1000)
+    await cache.set("a", 0, 0, 0, b"x" * 2000, ttl=300)
+    assert await cache.get("a", 0, 0, 0) is None
+
+
+@pytest.mark.asyncio
 async def test_in_memory_tile_cache_ttl_expiry():
-    cache = InMemoryTileCacheProvider(max_entries=10)
+    cache = InMemoryTileCacheProvider()
     await cache.set("foo", 0, 0, 0, b"x", ttl=0)
     # ttl=0 means immediately expired on next monotonic tick.
     # The expires_at_monotonic stored is `now + 0` so any subsequent
@@ -91,7 +109,7 @@ async def test_in_memory_tile_cache_ttl_expiry():
 
 @pytest.mark.asyncio
 async def test_in_memory_tile_cache_invalidate_table():
-    cache = InMemoryTileCacheProvider(max_entries=10)
+    cache = InMemoryTileCacheProvider()
     await cache.set("foo", 0, 0, 0, b"X", ttl=300)
     await cache.set("foo", 1, 0, 0, b"Y", ttl=300)
     await cache.set("bar", 0, 0, 0, b"Z", ttl=300)

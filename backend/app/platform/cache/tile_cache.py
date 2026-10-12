@@ -5,9 +5,9 @@ Stores gzip-compressed MVT tile bytes with configurable TTL, using
 RedisCacheProvider). All Redis errors are caught and logged, never
 propagated to callers.
 
-PERF-01: when ``REDIS_URL`` is unset, ``InMemoryTileCacheProvider`` gives a
-bounded LRU fallback (~50k entries, ~200MB at ~4KB/tile) with matching TTL
-semantics (default 300s, per-call override).
+PERF-01: when ``REDIS_URL`` is unset, ``InMemoryTileCacheProvider`` gives an
+LRU fallback bounded by bytes with matching TTL semantics (default 300s,
+per-call override).
 
 PERF-11: hit/miss counters carry a ``table_name`` label; ``_safe_label``
 bounds cardinality by collapsing anything not matching the documented
@@ -158,20 +158,33 @@ class TileCacheProvider:
         return True
 
 
+# Tiles run from a few KB to several hundred KB on wide tables, so the budget
+# is in bytes: a count bound could hold tens of gigabytes.
+_MEMORY_TILE_BUDGET_BYTES = 256 * 1024 * 1024
+_TILE_ENTRY_OVERHEAD_BYTES = 256
+
+
+def _tile_entry_size(entry: tuple[bytes, float]) -> int:
+    return len(entry[0]) + _TILE_ENTRY_OVERHEAD_BYTES
+
+
 class InMemoryTileCacheProvider:
     """In-memory LRU fallback for tile cache when REDIS_URL is unset.
 
-    Bounded LRU + per-entry TTL (~50k entries, ~200MB at ~4KB/tile).
+    LRU bounded by tile bytes + per-entry TTL.
     Interface matches ``TileCacheProvider`` -- same async
     ``get/set/invalidate_table`` signatures, so callers need zero changes.
 
     ``cachetools`` has no per-key TTL (``TTLCache`` is one global TTL), so
     entries are stored as ``(value, expires_at_monotonic)`` and checked on
-    read; ``maxsize`` bounds memory, expired entries drop lazily.
+    read; ``maxsize`` bounds bytes, expired entries drop lazily. A tile larger
+    than the whole budget is not cached.
     """
 
-    def __init__(self, max_entries: int = 50_000) -> None:
-        self._cache: LRUCache[str, tuple[bytes, float]] = LRUCache(maxsize=max_entries)
+    def __init__(self, max_bytes: int = _MEMORY_TILE_BUDGET_BYTES) -> None:
+        self._cache: LRUCache[str, tuple[bytes, float]] = LRUCache(
+            maxsize=max_bytes, getsizeof=_tile_entry_size
+        )
 
     async def get(
         self,
@@ -211,7 +224,11 @@ class InMemoryTileCacheProvider:
         """Store tile bytes with TTL. LRU evicts oldest when at capacity."""
         suffix = f":{cols_key}" if cols_key else ""
         key = f"tile:{table}:{z}:{x}:{y}{suffix}"
-        self._cache[key] = (data, time.monotonic() + ttl)
+        entry = (data, time.monotonic() + ttl)
+        if _tile_entry_size(entry) > self._cache.maxsize:
+            self._cache.pop(key, None)
+            return
+        self._cache[key] = entry
 
     async def invalidate_table(self, table: str) -> bool:
         """Delete all cached tiles for a table.

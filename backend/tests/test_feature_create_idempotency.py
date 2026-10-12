@@ -127,24 +127,18 @@ async def test_a_retry_after_a_lost_response_returns_the_created_feature(
 ):
     """The first attempt commits, then fails before answering; the retry finds it."""
 
-    class DroppedAfterCommit:
-        async def invalidate_table(self, table: str) -> None:
-            raise RuntimeError("connection dropped after the commit")
+    def dropped_after_commit(*args, **kwargs):
+        raise RuntimeError("connection dropped after the commit")
 
     sketch = f"sketch-{uuid.uuid4()}"
-    with patch.object(features_router, "get_tile_cache", lambda: DroppedAfterCommit()):
+    with patch.object(
+        features_router, "_created_feature_response", dropped_after_commit
+    ):
         with pytest.raises(RuntimeError, match="dropped after the commit"):
             await _create(client, admin_dataset, admin_auth_header, sketch)
     assert await _row_count(test_db_session, admin_dataset) == 1
 
-    invalidated: list[str] = []
-
-    class RecordingCache:
-        async def invalidate_table(self, table: str) -> None:
-            invalidated.append(table)
-
-    with patch.object(features_router, "get_tile_cache", lambda: RecordingCache()):
-        retry = await _create(client, admin_dataset, admin_auth_header, sketch)
+    retry = await _create(client, admin_dataset, admin_auth_header, sketch)
 
     assert retry.status_code == 201, retry.text
     assert await _row_count(test_db_session, admin_dataset) == 1
@@ -159,7 +153,6 @@ async def test_a_retry_after_a_lost_response_returns_the_created_feature(
         text("SELECT tile_cache_version FROM catalog.datasets WHERE id = :id"),
         {"id": admin_dataset.id},
     )
-    assert invalidated == [admin_dataset.table_name]
     assert (
         await test_db_session.scalar(
             text("SELECT feature_count FROM catalog.datasets WHERE id = :id"),

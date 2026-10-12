@@ -558,7 +558,7 @@ async def test_in_memory_invalidate_table_is_tenant_scoped(monkeypatch):
     tenant_a = "11111111-2222-3333-4444-555555555555"
     tenant_b = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     monkeypatch.setattr(settings, "geolens_tenancy_mode", "multi_tenant")
-    cache = InMemoryTileCacheProvider(max_entries=10)
+    cache = InMemoryTileCacheProvider()
     await cache.set("target", 1, 0, 0, b"a", ttl=60)
     await cache.set(f"{tenant_a}:target", 1, 0, 0, b"b", ttl=60)
     await cache.set(f"{tenant_b}:target", 1, 0, 0, b"d", ttl=60)
