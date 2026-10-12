@@ -12,7 +12,7 @@ import re
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from urllib.parse import urlencode
 
@@ -49,6 +49,11 @@ from app.modules.catalog.datasets.domain.models import (
 from app.modules.catalog.features.service import parse_bbox
 from app.core.dependencies import get_db
 from app.core.public_urls import get_public_api_url, get_public_app_url
+from app.platform.cache import (
+    get_cache,
+    tenant_cache_context_available,
+    tenant_cache_key,
+)
 from app.platform.extensions import get_catalog_port
 from app.standards.ogc.errors import ERROR_RESPONSES_PUBLIC, NOT_FOUND_RESPONSE
 from app.standards.ogc.utils import (
@@ -550,6 +555,33 @@ async def _collection_scope_filter(
     return membership
 
 
+_STAC_ANON_CACHE_TTL = 30  # seconds, matches the search cache
+
+_M = TypeVar("_M", bound=BaseModel)
+
+
+def _anon_cache_key(name: str, user: Identity | None, stac_api_url: str) -> str | None:
+    """Cache key for anonymous callers only; they share one visibility, so the
+    API URL is the only varying part."""
+    if user is not None or not tenant_cache_context_available():
+        return None
+    return tenant_cache_key(f"stac:{name}:{stac_api_url}")
+
+
+async def _anon_cache_get(key: str | None, model: type[_M]) -> _M | None:
+    cached = await get_cache().get(key) if key is not None else None
+    return model.model_validate(cached) if cached is not None else None
+
+
+async def _anon_cache_put(key: str | None, result: BaseModel) -> None:
+    if key is not None:
+        await get_cache().set(
+            key,
+            result.model_dump(mode="json", exclude_none=True),
+            ttl=_STAC_ANON_CACHE_TTL,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -566,7 +598,17 @@ async def landing_page(
 ) -> StacCatalog:
     """STAC Catalog landing page."""
     stac_api_url, _ = await _resolve_urls(db, request)
+    cache_key = _anon_cache_key("landing", user, stac_api_url)
+    if (hit := await _anon_cache_get(cache_key, StacCatalog)) is not None:
+        return hit
+    result = await _build_landing_page(db, user, stac_api_url)
+    await _anon_cache_put(cache_key, result)
+    return result
 
+
+async def _build_landing_page(
+    db: AsyncSession, user: Identity | None, stac_api_url: str
+) -> StacCatalog:
     links = [
         StacLink(rel="self", href=f"{stac_api_url}/", type="application/json"),
         StacLink(rel="root", href=f"{stac_api_url}/", type="application/json"),
@@ -664,6 +706,19 @@ async def get_collections(
 ) -> StacCollectionListResponse:
     """List all STAC Collections."""
     stac_api_url, _ = await _resolve_urls(db, request)
+    cache_key = _anon_cache_key("collections", user, stac_api_url)
+    if (
+        hit := await _anon_cache_get(cache_key, StacCollectionListResponse)
+    ) is not None:
+        return hit
+    result = await _build_collection_list(db, user, stac_api_url)
+    await _anon_cache_put(cache_key, result)
+    return result
+
+
+async def _build_collection_list(
+    db: AsyncSession, user: Identity | None, stac_api_url: str
+) -> StacCollectionListResponse:
     # Aggregate extent/keyword/EPSG summaries must exclude
     # private-but-published rasters, matching the item-body visibility gate.
     user_roles = await _resolve_roles(db, user)

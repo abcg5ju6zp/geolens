@@ -51,6 +51,7 @@ from app.standards.geodcat_ap.service import (
     record_to_geodcat_ap,
 )
 from app.standards.geodcat_ap.validation import validate_geodcat_ap
+from app.modules.catalog.datasets.api.feed_response import serve_feed
 from app.modules.catalog.datasets.domain.models import (
     Dataset as DatasetModel,
     DatasetGrant,
@@ -346,6 +347,26 @@ async def _get_dcat_dataset_for_export(
 # no-trailing-slash variants register against the same handler. Slash form
 # stays canonical (already in OpenAPI); no-slash is a hidden alias closing
 # the 404 regression introduced by redirect_slashes=False (api/main.py).
+_FeedInputs = tuple[
+    list[DatasetModel], dict[uuid.UUID, str | None], dict[uuid.UUID, bool]
+]
+
+
+async def _load_feed_inputs(
+    db: AsyncSession,
+    user: Identity | None,
+    limit: int = _DCAT_FEED_MAX_DATASETS,
+    offset: int = 0,
+) -> _FeedInputs:
+    """Everything a feed builder reads, loaded before leaving the session's loop."""
+    datasets = await _get_visible_dcat_datasets(db, user, limit=limit, offset=offset)
+    return (
+        datasets,
+        await _visible_lineage(db, datasets, user),
+        await _dcat_raster_asset_presence(db, datasets),
+    )
+
+
 @router.get("/dcat", response_class=JSONResponse, include_in_schema=False)
 @router.get("/dcat/", response_class=JSONResponse)
 async def get_dcat_catalog(
@@ -354,33 +375,43 @@ async def get_dcat_catalog(
     db: AsyncSession = Depends(get_db),
     limit: int = _FEED_LIMIT_Q,
     offset: int = _FEED_OFFSET_Q,
-) -> JSONResponse:
+) -> Response:
     """DCAT 3 JSON-LD catalog feed. Respects dataset visibility."""
-    datasets = await _get_visible_dcat_datasets(db, user, limit=limit, offset=offset)
-
     app_base_url, base_url = await get_public_urls(db, request=request)
     preferred_languages = parse_accept_languages(request)
-    catalog = catalog_to_dcat(
-        datasets,
-        base_url,
-        app_base_url=app_base_url,
-        preferred_languages=preferred_languages,
-        lineage_by_record_id=await _visible_lineage(db, datasets, user),
-        has_raster_asset_by_id=await _dcat_raster_asset_presence(db, datasets),
-    )
-    completeness = _catalog_completeness(
-        datasets,
-        catalog,
-        "dcat:dataset",
-        [dcat_fallback_fields(dataset, preferred_languages) for dataset in datasets],
-    )
-    return JSONResponse(
-        content=catalog,
-        media_type="application/ld+json",
-        headers={
+
+    def build(inputs: _FeedInputs) -> tuple[dict, dict[str, str]]:
+        datasets, lineage, has_asset = inputs
+        catalog = catalog_to_dcat(
+            datasets,
+            base_url,
+            app_base_url=app_base_url,
+            preferred_languages=preferred_languages,
+            lineage_by_record_id=lineage,
+            has_raster_asset_by_id=has_asset,
+        )
+        completeness = _catalog_completeness(
+            datasets,
+            catalog,
+            "dcat:dataset",
+            [dcat_fallback_fields(d, preferred_languages) for d in datasets],
+        )
+        return catalog, {
             **_language_headers(_dcat_content_language(catalog)),
             **_catalog_completeness_headers(completeness),
+        }
+
+    return await serve_feed(
+        "dcat",
+        user,
+        {
+            "limit": limit,
+            "offset": offset,
+            "urls": [app_base_url, base_url],
+            "languages": preferred_languages,
         },
+        lambda: _load_feed_inputs(db, user, limit, offset),
+        build,
     )
 
 
@@ -394,29 +425,38 @@ async def validate_dcat3_catalog(
     request: Request,
     user: Identity | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
+) -> Response:
     """Validate the visible W3C DCAT 3 catalog feed."""
-    datasets = await _get_visible_dcat_datasets(db, user)
-
     app_base_url, base_url = await get_public_urls(db, request=request)
-    catalog = catalog_to_dcat(
-        datasets,
-        base_url,
-        app_base_url=app_base_url,
-        lineage_by_record_id=await _visible_lineage(db, datasets, user),
-        has_raster_asset_by_id=await _dcat_raster_asset_presence(db, datasets),
-    )
-    report = validate_dcat3(catalog, "Catalog")
-    report.update(
-        _catalog_completeness(
-            datasets,
-            catalog,
-            "dcat:dataset",
-            [dcat_fallback_fields(dataset) for dataset in datasets],
-        )
-    )
 
-    return JSONResponse(content=report)
+    def build(inputs: _FeedInputs) -> tuple[dict, dict[str, str]]:
+        datasets, lineage, has_asset = inputs
+        catalog = catalog_to_dcat(
+            datasets,
+            base_url,
+            app_base_url=app_base_url,
+            lineage_by_record_id=lineage,
+            has_raster_asset_by_id=has_asset,
+        )
+        report = validate_dcat3(catalog, "Catalog")
+        report.update(
+            _catalog_completeness(
+                datasets,
+                catalog,
+                "dcat:dataset",
+                [dcat_fallback_fields(d) for d in datasets],
+            )
+        )
+        return report, {}
+
+    return await serve_feed(
+        "dcat-validation",
+        user,
+        {"urls": [app_base_url, base_url]},
+        lambda: _load_feed_inputs(db, user),
+        build,
+        media_type="application/json",
+    )
 
 
 @router.get("/dcat-us/3.0", response_class=JSONResponse, include_in_schema=False)
@@ -431,33 +471,43 @@ async def get_dcat_us3_catalog(
     db: AsyncSession = Depends(get_db),
     limit: int = _FEED_LIMIT_Q,
     offset: int = _FEED_OFFSET_Q,
-) -> JSONResponse:
+) -> Response:
     """DCAT-US Schema v3.0 catalog feed. Respects dataset visibility."""
-    datasets = await _get_visible_dcat_datasets(db, user, limit=limit, offset=offset)
-
     app_base_url, base_url = await get_public_urls(db, request=request)
-    catalog = catalog_to_dcat_us3(
-        datasets,
-        base_url,
-        app_base_url=app_base_url,
-        catalog_contact_email=settings.dcat_contact_email,
-        lineage_by_record_id=await _visible_lineage(db, datasets, user),
-        has_raster_asset_by_id=await _dcat_raster_asset_presence(db, datasets),
-    )
-    fallback_fields = [
-        dcat_us3_fallback_fields(dataset, settings.dcat_contact_email)
-        for dataset in datasets
-    ]
-    completeness = _catalog_completeness(datasets, catalog, "dataset", fallback_fields)
-    _ensure_conformant_dcat_us3(catalog, "Catalog")
 
-    return JSONResponse(
-        content=catalog,
-        media_type="application/ld+json",
-        headers={
+    def build(inputs: _FeedInputs) -> tuple[dict, dict[str, str]]:
+        datasets, lineage, has_asset = inputs
+        catalog = catalog_to_dcat_us3(
+            datasets,
+            base_url,
+            app_base_url=app_base_url,
+            catalog_contact_email=settings.dcat_contact_email,
+            lineage_by_record_id=lineage,
+            has_raster_asset_by_id=has_asset,
+        )
+        fallback_fields = [
+            dcat_us3_fallback_fields(d, settings.dcat_contact_email) for d in datasets
+        ]
+        completeness = _catalog_completeness(
+            datasets, catalog, "dataset", fallback_fields
+        )
+        _ensure_conformant_dcat_us3(catalog, "Catalog")
+        return catalog, {
             "Content-Language": str(catalog.get("language") or "en"),
             **_catalog_completeness_headers(completeness),
+        }
+
+    return await serve_feed(
+        "dcat-us",
+        user,
+        {
+            "limit": limit,
+            "offset": offset,
+            "urls": [app_base_url, base_url],
+            "contact": settings.dcat_contact_email,
         },
+        lambda: _load_feed_inputs(db, user, limit, offset),
+        build,
     )
 
 
@@ -471,27 +521,37 @@ async def validate_dcat_us3_catalog(
     request: Request,
     user: Identity | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
+) -> Response:
     """Validate the visible DCAT-US Schema v3.0 catalog feed."""
-    datasets = await _get_visible_dcat_datasets(db, user)
-
     app_base_url, base_url = await get_public_urls(db, request=request)
-    catalog = catalog_to_dcat_us3(
-        datasets,
-        base_url,
-        app_base_url=app_base_url,
-        catalog_contact_email=settings.dcat_contact_email,
-        lineage_by_record_id=await _visible_lineage(db, datasets, user),
-        has_raster_asset_by_id=await _dcat_raster_asset_presence(db, datasets),
-    )
-    report = validate_dcat_us3(catalog, "Catalog")
-    fallback_fields = [
-        dcat_us3_fallback_fields(dataset, settings.dcat_contact_email)
-        for dataset in datasets
-    ]
-    report.update(_catalog_completeness(datasets, catalog, "dataset", fallback_fields))
 
-    return JSONResponse(content=report)
+    def build(inputs: _FeedInputs) -> tuple[dict, dict[str, str]]:
+        datasets, lineage, has_asset = inputs
+        catalog = catalog_to_dcat_us3(
+            datasets,
+            base_url,
+            app_base_url=app_base_url,
+            catalog_contact_email=settings.dcat_contact_email,
+            lineage_by_record_id=lineage,
+            has_raster_asset_by_id=has_asset,
+        )
+        report = validate_dcat_us3(catalog, "Catalog")
+        fallback_fields = [
+            dcat_us3_fallback_fields(d, settings.dcat_contact_email) for d in datasets
+        ]
+        report.update(
+            _catalog_completeness(datasets, catalog, "dataset", fallback_fields)
+        )
+        return report, {}
+
+    return await serve_feed(
+        "dcat-us-validation",
+        user,
+        {"urls": [app_base_url, base_url], "contact": settings.dcat_contact_email},
+        lambda: _load_feed_inputs(db, user),
+        build,
+        media_type="application/json",
+    )
 
 
 @router.get("/geodcat-ap", response_class=JSONResponse, include_in_schema=False)
@@ -502,29 +562,33 @@ async def get_geodcat_ap_catalog(
     db: AsyncSession = Depends(get_db),
     limit: int = _FEED_LIMIT_Q,
     offset: int = _FEED_OFFSET_Q,
-) -> JSONResponse:
+) -> Response:
     """GeoDCAT-AP 2.0.0 catalog feed. Respects dataset visibility."""
-    datasets = await _get_visible_dcat_datasets(db, user, limit=limit, offset=offset)
-
     app_base_url, base_url = await get_public_urls(db, request=request)
-    catalog = catalog_to_geodcat_ap(
-        datasets,
-        base_url,
-        app_base_url=app_base_url,
-        lineage_by_record_id=await _visible_lineage(db, datasets, user),
-        has_raster_asset_by_id=await _dcat_raster_asset_presence(db, datasets),
-    )
-    completeness = _catalog_completeness(
-        datasets,
-        catalog,
-        "dcat:dataset",
-        [geodcat_ap_fallback_fields(dataset) for dataset in datasets],
-    )
 
-    return JSONResponse(
-        content=catalog,
-        media_type="application/ld+json",
-        headers=_catalog_completeness_headers(completeness),
+    def build(inputs: _FeedInputs) -> tuple[dict, dict[str, str]]:
+        datasets, lineage, has_asset = inputs
+        catalog = catalog_to_geodcat_ap(
+            datasets,
+            base_url,
+            app_base_url=app_base_url,
+            lineage_by_record_id=lineage,
+            has_raster_asset_by_id=has_asset,
+        )
+        completeness = _catalog_completeness(
+            datasets,
+            catalog,
+            "dcat:dataset",
+            [geodcat_ap_fallback_fields(d) for d in datasets],
+        )
+        return catalog, _catalog_completeness_headers(completeness)
+
+    return await serve_feed(
+        "geodcat-ap",
+        user,
+        {"limit": limit, "offset": offset, "urls": [app_base_url, base_url]},
+        lambda: _load_feed_inputs(db, user, limit, offset),
+        build,
     )
 
 
@@ -538,29 +602,38 @@ async def validate_geodcat_ap_catalog(
     request: Request,
     user: Identity | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
+) -> Response:
     """Validate the visible GeoDCAT-AP 2.0.0 catalog feed."""
-    datasets = await _get_visible_dcat_datasets(db, user)
-
     app_base_url, base_url = await get_public_urls(db, request=request)
-    catalog = catalog_to_geodcat_ap(
-        datasets,
-        base_url,
-        app_base_url=app_base_url,
-        lineage_by_record_id=await _visible_lineage(db, datasets, user),
-        has_raster_asset_by_id=await _dcat_raster_asset_presence(db, datasets),
-    )
-    report = validate_geodcat_ap(catalog, "Catalog")
-    report.update(
-        _catalog_completeness(
-            datasets,
-            catalog,
-            "dcat:dataset",
-            [geodcat_ap_fallback_fields(dataset) for dataset in datasets],
-        )
-    )
 
-    return JSONResponse(content=report)
+    def build(inputs: _FeedInputs) -> tuple[dict, dict[str, str]]:
+        datasets, lineage, has_asset = inputs
+        catalog = catalog_to_geodcat_ap(
+            datasets,
+            base_url,
+            app_base_url=app_base_url,
+            lineage_by_record_id=lineage,
+            has_raster_asset_by_id=has_asset,
+        )
+        report = validate_geodcat_ap(catalog, "Catalog")
+        report.update(
+            _catalog_completeness(
+                datasets,
+                catalog,
+                "dcat:dataset",
+                [geodcat_ap_fallback_fields(d) for d in datasets],
+            )
+        )
+        return report, {}
+
+    return await serve_feed(
+        "geodcat-ap-validation",
+        user,
+        {"urls": [app_base_url, base_url]},
+        lambda: _load_feed_inputs(db, user),
+        build,
+        media_type="application/json",
+    )
 
 
 @router.get(

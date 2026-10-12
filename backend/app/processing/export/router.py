@@ -1,5 +1,6 @@
 """Export API endpoint: download datasets in various formats."""
 
+import asyncio
 import os
 import re
 import shutil
@@ -53,6 +54,7 @@ from app.standards.ogc.errors import (
     NOT_FOUND_RESPONSE,
     PAYLOAD_TOO_LARGE_RESPONSE,
     PRECONDITION_FAILED_RESPONSE,
+    RATE_LIMIT_RESPONSE,
 )
 
 logger = structlog.stdlib.get_logger(__name__)
@@ -86,6 +88,11 @@ _EXPORT_BODY = {
 # caller's filters applied. BA-06's subprocess timeout bounds runtime
 # regardless.
 _MAX_EXPORT_FEATURES = 5_000_000
+
+# Each cold conversion spawns ogr2ogr or streams rows into a temp file, so
+# concurrent ones are capped per process and the overflow is shed with a retry.
+_MAX_CONCURRENT_CONVERSIONS = 4
+_conversion_slots = asyncio.Semaphore(_MAX_CONCURRENT_CONVERSIONS)
 
 
 def _bare_satisfiable_range(request: Request, size: int) -> tuple[int, int] | None:
@@ -272,6 +279,7 @@ def _head_export_response(dataset_title: str, format_key: str) -> Response:
         },
         304: {"description": "The caller already holds this version of the file"},
         412: PRECONDITION_FAILED_RESPONSE,
+        429: RATE_LIMIT_RESPONSE,
     },
 )
 async def export_dataset_endpoint(
@@ -627,6 +635,13 @@ async def export_dataset_endpoint(
     # fix(#1532): stamped when conversion starts reading, not at
     # publication — ages the artifact from before build+upload+TTL, so it's
     # never older than that bound.
+    if _conversion_slots.locked():
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Export service busy, please retry",
+            headers={"Retry-After": "5", "Cache-Control": "no-store"},
+        )
+    await _conversion_slots.acquire()
     snapshot_at = time.time()
     try:
         if format == ExportFormat.parquet:
@@ -692,6 +707,8 @@ async def export_dataset_endpoint(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Export temporarily unavailable",
         )
+    finally:
+        _conversion_slots.release()
 
     # fix(#435): the export file exists from here, but nothing owns it until
     # the response below attaches background cleanup.

@@ -1385,7 +1385,7 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # Native search and OGC Records share visibility, query parsing and pagination.
     "backend/app/modules/catalog/search/router.py": 1452,
     # STAC endpoints share visibility, extent, lineage and pagination conformance rules.
-    "backend/app/standards/stac/router.py": 1826,
+    "backend/app/standards/stac/router.py": 1881,
     # Authorization, acquisition order and cache rehydration share this route boundary;
     # the Enterprise overlay pins _check_cold_rehydrate here.
     "backend/app/processing/tiles/router.py": 2724,
@@ -1395,9 +1395,9 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     "backend/app/processing/ai/service.py": 992,
     # Record children share ownership, ordering and publication-version invariants.
     "backend/app/modules/catalog/records/service.py": 877,
-    # Export formats share visibility, lineage, raster-asset presence and
-    # private-artifact authorization.
-    "backend/app/modules/catalog/datasets/api/router_export.py": 1463,
+    # Export formats and catalog feeds share visibility, lineage, raster-asset
+    # presence and private-artifact authorization.
+    "backend/app/modules/catalog/datasets/api/router_export.py": 1536,
     # Artifact selection, atomic publication, range reads and eviction share one cache
     # protocol.
     "backend/app/processing/export/artifact_cache.py": 559,

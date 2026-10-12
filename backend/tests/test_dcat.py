@@ -1236,3 +1236,94 @@ async def test_dcat_raster_without_anonymous_download_omits_the_cog_url(
     assert resp.status_code == 200
     assert len(_raster_tile_distributions(resp.json(), ds.id)) == 1
     assert not _cog_download_distributions(resp.json(), ds.id)
+
+
+# ---------------------------------------------------------------------------
+# Anonymous catalog feed cache
+# ---------------------------------------------------------------------------
+
+_FEED_URLS = [
+    "/datasets/dcat/",
+    "/datasets/dcat-us/3.0/",
+    "/datasets/geodcat-ap/",
+]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("url", _FEED_URLS)
+async def test_cached_anonymous_feed_never_leaks_private_dataset(
+    client: AsyncClient,
+    admin_auth_header: dict,
+    test_db_session,
+    url: str,
+):
+    """An authenticated response is never stored for, or served to, anonymous callers."""
+    admin_id = await get_user_id(test_db_session, "admin")
+    private = await _create_dcat_dataset(
+        test_db_session,
+        created_by=admin_id,
+        name="Cache Private",
+        visibility="private",
+    )
+    key = "dataset" if "dcat-us" in url else "dcat:dataset"
+
+    first = await client.get(url)
+    assert str(private.id) not in first.text
+
+    admin = await client.get(url, headers=admin_auth_header)
+    assert str(private.id) in admin.text, "admin must still see the private dataset"
+
+    second = await client.get(url)
+    assert second.status_code == 200
+    assert str(private.id) not in second.text
+    assert second.json()[key] == first.json()[key]
+
+
+@pytest.mark.anyio
+async def test_anonymous_feed_is_cached_then_reflects_new_dataset_after_ttl(
+    client: AsyncClient,
+    test_db_session,
+    monkeypatch,
+):
+    from app.modules.catalog.datasets.api.feed_response import FEED_CACHE_TTL
+    from app.platform.cache import memory
+
+    admin_id = await get_user_id(test_db_session, "admin")
+    one = await _create_dcat_dataset(
+        test_db_session, created_by=admin_id, name="Cache One"
+    )
+    first = await client.get("/datasets/dcat/")
+    assert str(one.id) in first.text
+
+    two = await _create_dcat_dataset(
+        test_db_session, created_by=admin_id, name="Cache Two"
+    )
+    cached = await client.get("/datasets/dcat/")
+    assert str(two.id) not in cached.text
+    for header in (
+        "content-type",
+        "content-language",
+        "x-geolens-source-dataset-count",
+    ):
+        assert cached.headers[header] == first.headers[header]
+
+    real = memory.time.monotonic
+    monkeypatch.setattr(memory.time, "monotonic", lambda: real() + FEED_CACHE_TTL + 1)
+    fresh = await client.get("/datasets/dcat/")
+    assert str(two.id) in fresh.text
+
+
+@pytest.mark.anyio
+async def test_feed_cache_is_keyed_on_page(
+    client: AsyncClient,
+    test_db_session,
+):
+    admin_id = await get_user_id(test_db_session, "admin")
+    for n in range(2):
+        await _create_dcat_dataset(
+            test_db_session, created_by=admin_id, name=f"Cache Page {n}"
+        )
+    page_one = await client.get("/datasets/dcat/", params={"limit": 1})
+    page_two = await client.get("/datasets/dcat/", params={"limit": 1, "offset": 1})
+    assert page_one.json()["dcat:dataset"] != page_two.json()["dcat:dataset"]
+    assert len(page_one.json()["dcat:dataset"]) == 1
