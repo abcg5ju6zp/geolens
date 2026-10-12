@@ -7636,6 +7636,16 @@
             ],
             "title": "Legend Title"
           },
+          "publish": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapPublishBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "excluded_layer_count": {
             "default": 0,
             "description": "Layers skipped due to access restrictions",
@@ -10896,6 +10906,112 @@
         "title": "MapPatch",
         "type": "object"
       },
+      "MapPublishAssetUrls": {
+        "description": "Nonce-namespaced URLs of a generation's confirmed public assets.",
+        "properties": {
+          "style_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style Url"
+          },
+          "sprite_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sprite Url"
+          },
+          "sprite_json_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sprite Json Url"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "og_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Og Image Url"
+          }
+        },
+        "title": "MapPublishAssetUrls",
+        "type": "object"
+      },
+      "MapPublishBlock": {
+        "description": "Publish-generation state attached to public map responses.\n\nPrivate maps return no block. ``generation_id`` targets the follow-up\nthumbnail/OG-image upload; ``missing_required`` names required assets not\nyet confirmed; URLs are populated once the generation is active.",
+        "properties": {
+          "generation_id": {
+            "format": "uuid",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "generation_number": {
+            "title": "Generation Number",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "building",
+              "ready",
+              "active",
+              "superseded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "missing_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Required",
+            "type": "array"
+          },
+          "assets": {
+            "$ref": "#/components/schemas/MapPublishAssetUrls"
+          }
+        },
+        "required": [
+          "generation_id",
+          "generation_number",
+          "status"
+        ],
+        "title": "MapPublishBlock",
+        "type": "object"
+      },
       "MapResponse": {
         "properties": {
           "id": {
@@ -11115,6 +11231,16 @@
               }
             ],
             "title": "Legend Title"
+          },
+          "publish": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapPublishBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13591,6 +13717,18 @@
             "minLength": 22,
             "title": "Data Uri",
             "type": "string"
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Id"
           }
         },
         "required": [
@@ -17105,6 +17243,16 @@
             },
             "title": "Layers",
             "type": "array"
+          },
+          "publish": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapPublishBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -19272,6 +19420,18 @@
             "minLength": 22,
             "title": "Data Uri",
             "type": "string"
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Id"
           }
         },
         "required": [
@@ -48961,6 +49121,563 @@
           }
         ],
         "summary": "Import Map Style Endpoint",
+        "tags": [
+          "Maps"
+        ]
+      }
+    },
+    "/maps/published/{map_id}/{nonce}/og-image": {
+      "get": {
+        "operationId": "published_og_image_maps_published__map_id___nonce__og_image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Map Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "nonce",
+            "required": true,
+            "schema": {
+              "title": "Nonce",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The generation social card"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad request \u2014 invalid query parameters or payload"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too many requests \u2014 retry after the advertised interval",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried",
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service unavailable \u2014 the database could not serve the request"
+          }
+        },
+        "summary": "Published Og Image",
+        "tags": [
+          "Maps"
+        ]
+      }
+    },
+    "/maps/published/{map_id}/{nonce}/sprite.json": {
+      "get": {
+        "operationId": "published_sprite_json_maps_published__map_id___nonce__sprite_json_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Map Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "nonce",
+            "required": true,
+            "schema": {
+              "title": "Nonce",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad request \u2014 invalid query parameters or payload"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too many requests \u2014 retry after the advertised interval",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried",
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service unavailable \u2014 the database could not serve the request"
+          }
+        },
+        "summary": "Published Sprite Json",
+        "tags": [
+          "Maps"
+        ]
+      }
+    },
+    "/maps/published/{map_id}/{nonce}/sprite.png": {
+      "get": {
+        "operationId": "published_sprite_png_maps_published__map_id___nonce__sprite_png_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Map Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "nonce",
+            "required": true,
+            "schema": {
+              "title": "Nonce",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The frozen sprite sheet"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad request \u2014 invalid query parameters or payload"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too many requests \u2014 retry after the advertised interval",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried",
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service unavailable \u2014 the database could not serve the request"
+          }
+        },
+        "summary": "Published Sprite Png",
+        "tags": [
+          "Maps"
+        ]
+      }
+    },
+    "/maps/published/{map_id}/{nonce}/style.json": {
+      "get": {
+        "operationId": "published_style_maps_published__map_id___nonce__style_json_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Map Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "nonce",
+            "required": true,
+            "schema": {
+              "title": "Nonce",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The frozen MapLibre style document"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad request \u2014 invalid query parameters or payload"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too many requests \u2014 retry after the advertised interval",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried",
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service unavailable \u2014 the database could not serve the request"
+          }
+        },
+        "summary": "Published Style",
+        "tags": [
+          "Maps"
+        ]
+      }
+    },
+    "/maps/published/{map_id}/{nonce}/thumbnail": {
+      "get": {
+        "operationId": "published_thumbnail_maps_published__map_id___nonce__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Map Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "nonce",
+            "required": true,
+            "schema": {
+              "title": "Nonce",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The generation thumbnail"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad request \u2014 invalid query parameters or payload"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too many requests \u2014 retry after the advertised interval",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the request may be retried",
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service unavailable \u2014 the database could not serve the request"
+          }
+        },
+        "summary": "Published Thumbnail",
         "tags": [
           "Maps"
         ]

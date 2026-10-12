@@ -6,6 +6,11 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
+from typing import cast
+from uuid import UUID
+
 
 T = TypeVar("T", bound="OgImageUploadRequest")
 
@@ -26,13 +31,23 @@ class OgImageUploadRequest:
 
         Attributes:
             data_uri (str):
+            generation_id (None | Unset | UUID):
     """
 
     data_uri: str
+    generation_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         data_uri = self.data_uri
+
+        generation_id: None | str | Unset
+        if isinstance(self.generation_id, Unset):
+            generation_id = UNSET
+        elif isinstance(self.generation_id, UUID):
+            generation_id = str(self.generation_id)
+        else:
+            generation_id = self.generation_id
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -41,6 +56,8 @@ class OgImageUploadRequest:
                 "data_uri": data_uri,
             }
         )
+        if generation_id is not UNSET:
+            field_dict["generation_id"] = generation_id
 
         return field_dict
 
@@ -49,8 +66,26 @@ class OgImageUploadRequest:
         d = dict(src_dict)
         data_uri = d.pop("data_uri")
 
+        def _parse_generation_id(data: object) -> None | Unset | UUID:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                generation_id_type_0 = UUID(data)
+
+                return generation_id_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | Unset | UUID, data)
+
+        generation_id = _parse_generation_id(d.pop("generation_id", UNSET))
+
         og_image_upload_request = cls(
             data_uri=data_uri,
+            generation_id=generation_id,
         )
 
         og_image_upload_request.additional_properties = d

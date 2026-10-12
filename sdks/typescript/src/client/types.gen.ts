@@ -4457,6 +4457,7 @@ export type DuplicateMapResponse = {
      * Legend Title
      */
     legend_title?: string | null;
+    publish?: MapPublishBlock | null;
     /**
      * Excluded Layer Count
      *
@@ -6350,6 +6351,63 @@ export type MapPatch = {
 };
 
 /**
+ * MapPublishAssetUrls
+ *
+ * Nonce-namespaced URLs of a generation's confirmed public assets.
+ */
+export type MapPublishAssetUrls = {
+    /**
+     * Style Url
+     */
+    style_url?: string | null;
+    /**
+     * Sprite Url
+     */
+    sprite_url?: string | null;
+    /**
+     * Sprite Json Url
+     */
+    sprite_json_url?: string | null;
+    /**
+     * Thumbnail Url
+     */
+    thumbnail_url?: string | null;
+    /**
+     * Og Image Url
+     */
+    og_image_url?: string | null;
+};
+
+/**
+ * MapPublishBlock
+ *
+ * Publish-generation state attached to public map responses.
+ *
+ * Private maps return no block. ``generation_id`` targets the follow-up
+ * thumbnail/OG-image upload; ``missing_required`` names required assets not
+ * yet confirmed; URLs are populated once the generation is active.
+ */
+export type MapPublishBlock = {
+    /**
+     * Generation Id
+     */
+    generation_id: string;
+    /**
+     * Generation Number
+     */
+    generation_number: number;
+    /**
+     * Status
+     */
+    status: 'pending' | 'building' | 'ready' | 'active' | 'superseded' | 'failed' | 'cancelled';
+    /**
+     * Missing Required
+     */
+    missing_required?: Array<string>;
+    assets?: MapPublishAssetUrls;
+};
+
+/**
  * MapResponse
  */
 export type MapResponse = {
@@ -6450,6 +6508,7 @@ export type MapResponse = {
      * Legend Title
      */
     legend_title?: string | null;
+    publish?: MapPublishBlock | null;
 };
 
 /**
@@ -7871,6 +7930,10 @@ export type OgImageUploadRequest = {
      * Data Uri
      */
     data_uri: string;
+    /**
+     * Generation Id
+     */
+    generation_id?: string | null;
 };
 
 /**
@@ -9950,6 +10013,7 @@ export type SharedMapResponse = {
      * Layers
      */
     layers: Array<SharedLayerResponse>;
+    publish?: MapPublishBlock | null;
 };
 
 /**
@@ -11292,6 +11356,10 @@ export type ThumbnailUploadRequest = {
      * Data Uri
      */
     data_uri: string;
+    /**
+     * Generation Id
+     */
+    generation_id?: string | null;
 };
 
 /**
@@ -23928,6 +23996,274 @@ export type ImportMapStyleEndpointMapsImportPostResponses = {
 };
 
 export type ImportMapStyleEndpointMapsImportPostResponse = ImportMapStyleEndpointMapsImportPostResponses[keyof ImportMapStyleEndpointMapsImportPostResponses];
+
+export type PublishedOgImageMapsPublishedMapIdNonceOgImageGetData = {
+    body?: never;
+    path: {
+        /**
+         * Map Id
+         */
+        map_id: string;
+        /**
+         * Nonce
+         */
+        nonce: string;
+    };
+    query?: never;
+    url: '/maps/published/{map_id}/{nonce}/og-image';
+};
+
+export type PublishedOgImageMapsPublishedMapIdNonceOgImageGetErrors = {
+    /**
+     * Bad request — invalid query parameters or payload
+     */
+    400: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type PublishedOgImageMapsPublishedMapIdNonceOgImageGetError = PublishedOgImageMapsPublishedMapIdNonceOgImageGetErrors[keyof PublishedOgImageMapsPublishedMapIdNonceOgImageGetErrors];
+
+export type PublishedOgImageMapsPublishedMapIdNonceOgImageGetResponses = {
+    /**
+     * The generation social card
+     */
+    200: Blob | File;
+};
+
+export type PublishedOgImageMapsPublishedMapIdNonceOgImageGetResponse = PublishedOgImageMapsPublishedMapIdNonceOgImageGetResponses[keyof PublishedOgImageMapsPublishedMapIdNonceOgImageGetResponses];
+
+export type PublishedSpriteJsonMapsPublishedMapIdNonceSpriteJsonGetData = {
+    body?: never;
+    path: {
+        /**
+         * Map Id
+         */
+        map_id: string;
+        /**
+         * Nonce
+         */
+        nonce: string;
+    };
+    query?: never;
+    url: '/maps/published/{map_id}/{nonce}/sprite.json';
+};
+
+export type PublishedSpriteJsonMapsPublishedMapIdNonceSpriteJsonGetErrors = {
+    /**
+     * Bad request — invalid query parameters or payload
+     */
+    400: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type PublishedSpriteJsonMapsPublishedMapIdNonceSpriteJsonGetError = PublishedSpriteJsonMapsPublishedMapIdNonceSpriteJsonGetErrors[keyof PublishedSpriteJsonMapsPublishedMapIdNonceSpriteJsonGetErrors];
+
+export type PublishedSpriteJsonMapsPublishedMapIdNonceSpriteJsonGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetData = {
+    body?: never;
+    path: {
+        /**
+         * Map Id
+         */
+        map_id: string;
+        /**
+         * Nonce
+         */
+        nonce: string;
+    };
+    query?: never;
+    url: '/maps/published/{map_id}/{nonce}/sprite.png';
+};
+
+export type PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetErrors = {
+    /**
+     * Bad request — invalid query parameters or payload
+     */
+    400: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetError = PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetErrors[keyof PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetErrors];
+
+export type PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetResponses = {
+    /**
+     * The frozen sprite sheet
+     */
+    200: Blob | File;
+};
+
+export type PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetResponse = PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetResponses[keyof PublishedSpritePngMapsPublishedMapIdNonceSpritePngGetResponses];
+
+export type PublishedStyleMapsPublishedMapIdNonceStyleJsonGetData = {
+    body?: never;
+    path: {
+        /**
+         * Map Id
+         */
+        map_id: string;
+        /**
+         * Nonce
+         */
+        nonce: string;
+    };
+    query?: never;
+    url: '/maps/published/{map_id}/{nonce}/style.json';
+};
+
+export type PublishedStyleMapsPublishedMapIdNonceStyleJsonGetErrors = {
+    /**
+     * Bad request — invalid query parameters or payload
+     */
+    400: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type PublishedStyleMapsPublishedMapIdNonceStyleJsonGetError = PublishedStyleMapsPublishedMapIdNonceStyleJsonGetErrors[keyof PublishedStyleMapsPublishedMapIdNonceStyleJsonGetErrors];
+
+export type PublishedStyleMapsPublishedMapIdNonceStyleJsonGetResponses = {
+    /**
+     * The frozen MapLibre style document
+     */
+    200: Blob | File;
+};
+
+export type PublishedStyleMapsPublishedMapIdNonceStyleJsonGetResponse = PublishedStyleMapsPublishedMapIdNonceStyleJsonGetResponses[keyof PublishedStyleMapsPublishedMapIdNonceStyleJsonGetResponses];
+
+export type PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetData = {
+    body?: never;
+    path: {
+        /**
+         * Map Id
+         */
+        map_id: string;
+        /**
+         * Nonce
+         */
+        nonce: string;
+    };
+    query?: never;
+    url: '/maps/published/{map_id}/{nonce}/thumbnail';
+};
+
+export type PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetErrors = {
+    /**
+     * Bad request — invalid query parameters or payload
+     */
+    400: ProblemDetail;
+    /**
+     * Not found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation error
+     */
+    422: ProblemDetail;
+    /**
+     * Too many requests — retry after the advertised interval
+     */
+    429: ProblemDetail;
+    /**
+     * Internal server error
+     */
+    500: ProblemDetail;
+    /**
+     * Service unavailable — the database could not serve the request
+     */
+    503: ProblemDetail;
+};
+
+export type PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetError = PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetErrors[keyof PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetErrors];
+
+export type PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetResponses = {
+    /**
+     * The generation thumbnail
+     */
+    200: Blob | File;
+};
+
+export type PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetResponse = PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetResponses[keyof PublishedThumbnailMapsPublishedMapIdNonceThumbnailGetResponses];
 
 export type GetSharedMapEndpointMapsSharedTokenGetData = {
     body?: never;

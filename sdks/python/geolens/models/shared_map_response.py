@@ -12,6 +12,7 @@ from typing import cast
 
 if TYPE_CHECKING:
     from ..models.basemap_config import BasemapConfig
+    from ..models.map_publish_block import MapPublishBlock
     from ..models.shared_layer_response import SharedLayerResponse
     from ..models.terrain_config import TerrainConfig
 
@@ -37,6 +38,7 @@ class SharedMapResponse:
         terrain_config (None | TerrainConfig | Unset):
         has_non_public_layers (bool | Unset):  Default: False.
         legend_title (None | str | Unset):
+        publish (MapPublishBlock | None | Unset):
     """
 
     name: str
@@ -53,10 +55,12 @@ class SharedMapResponse:
     terrain_config: None | TerrainConfig | Unset = UNSET
     has_non_public_layers: bool | Unset = False
     legend_title: None | str | Unset = UNSET
+    publish: MapPublishBlock | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.basemap_config import BasemapConfig
+        from ..models.map_publish_block import MapPublishBlock
         from ..models.terrain_config import TerrainConfig
 
         name = self.name
@@ -107,6 +111,14 @@ class SharedMapResponse:
         else:
             legend_title = self.legend_title
 
+        publish: dict[str, Any] | None | Unset
+        if isinstance(self.publish, Unset):
+            publish = UNSET
+        elif isinstance(self.publish, MapPublishBlock):
+            publish = self.publish.to_dict()
+        else:
+            publish = self.publish
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -132,12 +144,15 @@ class SharedMapResponse:
             field_dict["has_non_public_layers"] = has_non_public_layers
         if legend_title is not UNSET:
             field_dict["legend_title"] = legend_title
+        if publish is not UNSET:
+            field_dict["publish"] = publish
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.basemap_config import BasemapConfig
+        from ..models.map_publish_block import MapPublishBlock
         from ..models.shared_layer_response import SharedLayerResponse
         from ..models.terrain_config import TerrainConfig
 
@@ -217,6 +232,23 @@ class SharedMapResponse:
 
         legend_title = _parse_legend_title(d.pop("legend_title", UNSET))
 
+        def _parse_publish(data: object) -> MapPublishBlock | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                publish_type_0 = MapPublishBlock.from_dict(data)
+
+                return publish_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(MapPublishBlock | None | Unset, data)
+
+        publish = _parse_publish(d.pop("publish", UNSET))
+
         shared_map_response = cls(
             name=name,
             description=description,
@@ -232,6 +264,7 @@ class SharedMapResponse:
             terrain_config=terrain_config,
             has_non_public_layers=has_non_public_layers,
             legend_title=legend_title,
+            publish=publish,
         )
 
         shared_map_response.additional_properties = d

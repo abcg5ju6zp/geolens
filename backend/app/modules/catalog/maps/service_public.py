@@ -441,6 +441,30 @@ async def get_shared_map(
 
     RasterAsset = get_catalog_port().raster_asset_orm_class()
 
+    # Frozen read: once a generation is active, anonymous/shared readers get
+    # its pinned layers and view, so a save mid-build can't mix new rows with
+    # the previous assets. Maps without an active generation keep the live
+    # read below (existing public maps and the first-generation window).
+    live_map = await get_map(session, token_obj.map_id)
+    if live_map is not None and live_map.published_generation_id is not None:
+        from app.modules.catalog.maps.models import MapPublishGeneration
+        from app.modules.catalog.maps.publish.shared_read import build_shared_snapshot
+
+        generation = await session.get(
+            MapPublishGeneration, live_map.published_generation_id
+        )
+        if generation is not None and generation.status == "active":
+            return await build_shared_snapshot(
+                session,
+                live_map,
+                generation,
+                embed_scope=embed_scope,
+                request=request,
+                user=user,
+                user_roles=user_roles,
+                allowed_origins=allowed_origins,
+            )
+
     # Single query: Map metadata + visible layers in one round trip.
     base_stmt = (
         select(

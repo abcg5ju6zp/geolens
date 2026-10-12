@@ -62,10 +62,13 @@ from app.modules.catalog.maps.service import (
     bulk_check_dataset_access,
     add_layer,
     apply_layer_diff,
+    build_publish_block,
+    cancel_in_flight_publications,
     check_map_ownership,
     create_map,
     delete_map,
     discard_map_asset_objects,
+    dispatch_map_publication,
     filter_layer_rows_by_dataset_visibility,
     terrain_dataset_ids_visible_to,
     get_dataset_meta,
@@ -78,8 +81,12 @@ from app.modules.catalog.maps.service import (
     lock_map_layers,
     map_asset_publication,
     new_map_asset_key,
+    prepare_map_publication,
+    purge_map_publish_namespace,
     record_map_history_event,
+    _fetch_layer_rows_ordered,
     remove_layer,
+    stage_generation_image,
     revoke_share_token_by_map,
     update_map,
     validate_public_visibility,
@@ -401,6 +408,7 @@ async def get_map_endpoint(
         terrain_dataset_ids=await terrain_dataset_ids_visible_to(
             db, map_obj.terrain_config, [layer.dataset_id for layer in layers], user
         ),
+        publish=await build_publish_block(db, map_obj),
     )
 
 
@@ -481,6 +489,9 @@ async def update_map_endpoint(
             # embed tokens (previously only the share token was flipped),
             # or they keep serving tiles for a now-private map.
             await revoke_embed_tokens_by_map(db, map_id)
+            # In-flight generations must not cut over once the map is private;
+            # the nonce routes also fail closed on map visibility.
+            await cancel_in_flight_publications(db, map_id)
 
     # feat(#1691): a non-admin may not move a map TO public when
     # restrict_public_visibility is on. None (untouched) passes through.
@@ -654,13 +665,20 @@ async def update_map_endpoint(
         # embed token is scoped to; revoke any orphaned embed tokens so they
         # stop serving tiles for content the map no longer exposes.
         await revoke_embed_tokens_for_dropped_datasets(db, map_id)
+    # Public-map content saves stage the next publish generation. Metadata-only
+    # saves (identical content fingerprint) and private maps return None.
+    generation = await prepare_map_publication(
+        db, map_obj, layer_tuples, created_by=user.id
+    )
     await db.commit()
+    await dispatch_map_publication(generation)
 
     return _build_map_response(
         map_obj,
         layers,
         forked_from_name=forked_name,
         created_by_username=owner_username,
+        publish=await build_publish_block(db, map_obj),
     )
 
 
@@ -828,13 +846,18 @@ async def patch_map_layers_endpoint(
     # token is scoped to; revoke any now-orphaned embed tokens.
     if body.removed:
         await revoke_embed_tokens_for_dropped_datasets(db, map_id)
+    generation = await prepare_map_publication(
+        db, map_obj, layer_tuples, created_by=user.id
+    )
     await db.commit()
+    await dispatch_map_publication(generation)
 
     return _build_map_response(
         map_obj,
         layers,
         forked_from_name=forked_name,
         created_by_username=owner_username,
+        publish=await build_publish_block(db, map_obj),
     )
 
 
@@ -877,6 +900,9 @@ async def delete_map_endpoint(
     )
     await db.commit()
     await discard_map_asset_objects(db, map_id, asset_keys)
+    # Generation rows cascade with the map; their staged objects live outside
+    # the thumbnail/OG keys and are swept here best effort.
+    await purge_map_publish_namespace(map_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -1039,11 +1065,35 @@ async def upload_thumbnail(
             detail="Thumbnail payload is not a valid image",
         )
 
+    media_type = "image/jpeg" if "jpeg" in header else "image/png"
+    storage = get_storage()
+
+    # Public maps confirm the capture into their (latest or given)
+    # generation; cutover promotes it, and a late upload to a superseded
+    # generation never moves the map pointer. Private maps fall through to
+    # the legacy direct column write.
+    if request.generation_id is not None or map_obj.visibility == "public":
+        staged = await stage_generation_image(
+            db,
+            map_obj=map_obj,
+            asset_name="thumbnail",
+            image_bytes=image_bytes,
+            media_type=media_type,
+            storage=storage,
+            generation_id=request.generation_id,
+        )
+        if staged is not None:
+            if staged.previous_key:
+                await discard_map_asset_objects(db, map_id, [staged.previous_key])
+            return Response(
+                status_code=status.HTTP_204_NO_CONTENT,
+                headers={"X-GeoLens-Publish": staged.outcome},
+            )
+
     ext = "jpg" if "jpeg" in header else "png"
     # fix(#1778): a fresh key per write, never one of two names per map.
     storage_key = new_map_asset_key("maps/thumbnails", map_id, ext)
 
-    storage = get_storage()
     # fix(#1778): object and row publish together — a failure in
     # the update/commit would leave the image behind with nothing pointing
     # at it, and since keys are never reused, every retry adds another.
@@ -1207,9 +1257,31 @@ async def upload_og_image(
         )
 
     ext = "jpg" if "jpeg" in header else "png"
+    media_type = "image/jpeg" if "jpeg" in header else "image/png"
+    storage = get_storage()
+
+    # Generation staging mirrors the thumbnail PUT: confirm into the target
+    # generation for public maps, promote only when it is the current active.
+    if request.generation_id is not None or map_obj.visibility == "public":
+        staged = await stage_generation_image(
+            db,
+            map_obj=map_obj,
+            asset_name="og_image",
+            image_bytes=image_bytes,
+            media_type=media_type,
+            storage=storage,
+            generation_id=request.generation_id,
+        )
+        if staged is not None:
+            if staged.previous_key:
+                await discard_map_asset_objects(db, map_id, [staged.previous_key])
+            return Response(
+                status_code=status.HTTP_204_NO_CONTENT,
+                headers={"X-GeoLens-Publish": staged.outcome},
+            )
+
     storage_key = new_map_asset_key("maps/og-images", map_id, ext)
 
-    storage = get_storage()
     # fix(#1778): same publication guard as the thumbnail PUT above.
     async with map_asset_publication() as publication:
         physical_key = _map_asset_storage_key(storage_key)
@@ -1379,7 +1451,16 @@ async def add_layer_endpoint(
             "sort_order": layer.sort_order,
         },
     )
+    generation = None
+    if map_obj.visibility == "public":
+        generation = await prepare_map_publication(
+            db,
+            map_obj,
+            await _fetch_layer_rows_ordered(db, map_id),
+            created_by=user.id,
+        )
     await db.commit()
+    await dispatch_map_publication(generation)
 
     return _build_layer_response(layer, _meta_to_kwargs(meta))
 
@@ -1448,7 +1529,16 @@ async def remove_layer_endpoint(
     # builder-audit #338 P0-01: removing a layer can drop a dataset an embed token is
     # scoped to; revoke any now-orphaned embed tokens for the map.
     await revoke_embed_tokens_for_dropped_datasets(db, map_id)
+    generation = None
+    if map_obj.visibility == "public":
+        generation = await prepare_map_publication(
+            db,
+            map_obj,
+            await _fetch_layer_rows_ordered(db, map_id),
+            created_by=user.id,
+        )
     await db.commit()
+    await dispatch_map_publication(generation)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -1526,7 +1616,16 @@ async def bulk_delete_layers_endpoint(
         # scoped to; revoke any now-orphaned embed tokens for the map.
         await revoke_embed_tokens_for_dropped_datasets(db, map_id)
 
+    generation = None
+    if deleted_count > 0 and map_obj.visibility == "public":
+        generation = await prepare_map_publication(
+            db,
+            map_obj,
+            await _fetch_layer_rows_ordered(db, map_id),
+            created_by=user.id,
+        )
     await db.commit()
+    await dispatch_map_publication(generation)
 
     return BulkDeleteLayersResponse(
         deleted=deleted_ids,

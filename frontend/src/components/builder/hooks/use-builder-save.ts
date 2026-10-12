@@ -265,6 +265,18 @@ function doCapture(
       rearmAutoCapture(mapId);
       return;
     }
+    // Stage the capture at the save's publish generation so it promotes with
+    // that cutover. Falls back to undefined (server resolves the latest gen)
+    // when the refetched map cache has not settled.
+    let generationId: string | null | undefined;
+    try {
+      const cached = queryClient.getQueryData<{
+        publish?: { generation_id?: string } | null;
+      }>(queryKeys.maps.detail(mapId));
+      generationId = cached?.publish?.generation_id;
+    } catch {
+      generationId = undefined;
+    }
     try {
       const srcCanvas = map.getCanvas();
       // fix(#1479 Codex P2 round 1): both crops carry the space backdrop when
@@ -305,7 +317,11 @@ function doCapture(
       const og = cropResize(srcCanvas, 1200, 630, backdrop);
       drawAttributionOverlay(og, credits, OG_ATTRIBUTION);
 
-      uploadThumbnail(mapId, thumb.toDataURL('image/jpeg', 0.7)).then(() => {
+      uploadThumbnail(
+        mapId,
+        thumb.toDataURL('image/jpeg', 0.7),
+        ...(generationId ? [generationId] : []),
+      ).then(() => {
         // chore(#1021): this refetches nothing on the builder route, and that is
         // expected rather than a bug. maps.all is ['maps'] while the builder mounts
         // useMap, which is ['map', id], a different root string. The target is the
@@ -322,7 +338,11 @@ function doCapture(
       });
 
       // 1200×630 OG image — fire-and-forget, isolated failure (SHARE-08)
-      uploadOgImage(mapId, og.toDataURL('image/jpeg', 0.85)).catch(() => {
+      uploadOgImage(
+        mapId,
+        og.toDataURL('image/jpeg', 0.85),
+        ...(generationId ? [generationId] : []),
+      ).catch(() => {
         if (import.meta.env.DEV) console.warn('[og-image] capture upload failed');
       });
     } catch (err) {

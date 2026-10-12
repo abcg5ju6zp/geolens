@@ -18,6 +18,7 @@ from app.modules.catalog.maps.models import Map, MapLayer
 from app.modules.catalog.maps.schemas import (
     DatasetMetaKwargs,
     MapLayerResponse,
+    MapPublishBlock,
     MapResponse,
 )
 from app.modules.catalog.maps.service import LayerRow, validate_public_visibility
@@ -318,6 +319,7 @@ def _build_map_response(
     created_by_username: str | None = None,
     *,
     terrain_dataset_ids: set[str] | None = None,
+    publish: MapPublishBlock | None = None,
 ) -> MapResponse:
     """Build the map response.
 
@@ -357,4 +359,5 @@ def _build_map_response(
         layer_count=len(layers),
         plugins=map_obj.plugins,
         legend_title=map_obj.legend_title,
+        publish=publish,
     )

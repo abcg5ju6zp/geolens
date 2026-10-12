@@ -493,6 +493,9 @@ from .map_layer_response_paint import MapLayerResponsePaint
 from .map_layer_response_style_config_type_0 import MapLayerResponseStyleConfigType0
 from .map_list_response import MapListResponse
 from .map_patch import MapPatch
+from .map_publish_asset_urls import MapPublishAssetUrls
+from .map_publish_block import MapPublishBlock
+from .map_publish_block_status import MapPublishBlockStatus
 from .map_response import MapResponse
 from .map_sprite_entry import MapSpriteEntry
 from .map_style_import_request import MapStyleImportRequest
@@ -1215,6 +1218,9 @@ __all__ = (
     "MapLayerResponseStyleConfigType0",
     "MapListResponse",
     "MapPatch",
+    "MapPublishAssetUrls",
+    "MapPublishBlock",
+    "MapPublishBlockStatus",
     "MapResponse",
     "MapSpriteEntry",
     "MapStyleImportRequest",

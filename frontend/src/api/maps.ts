@@ -341,17 +341,31 @@ export async function getMapShareToken(mapId: string): Promise<ShareTokenRespons
   return apiFetch<ShareTokenResponse | null>(`/maps/${mapId}/share/`);
 }
 
-export async function uploadThumbnail(mapId: string, dataUri: string): Promise<void> {
+export async function uploadThumbnail(
+  mapId: string,
+  dataUri: string,
+  generationId?: string | null,
+): Promise<void> {
   await apiFetch(`/maps/${mapId}/thumbnail/`, {
     method: 'PUT',
-    body: JSON.stringify({ data_uri: dataUri }),
+    body: JSON.stringify({
+      data_uri: dataUri,
+      ...(generationId ? { generation_id: generationId } : {}),
+    }),
   });
 }
 
-export async function uploadOgImage(mapId: string, dataUri: string): Promise<void> {
+export async function uploadOgImage(
+  mapId: string,
+  dataUri: string,
+  generationId?: string | null,
+): Promise<void> {
   await apiFetch(`/maps/${mapId}/og-image/`, {
     method: 'PUT',
-    body: JSON.stringify({ data_uri: dataUri }),
+    body: JSON.stringify({
+      data_uri: dataUri,
+      ...(generationId ? { generation_id: generationId } : {}),
+    }),
   });
 }
 

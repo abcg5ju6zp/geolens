@@ -3836,6 +3836,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/maps/published/{map_id}/{nonce}/og-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published Og Image */
+        get: operations["published_og_image_maps_published__map_id___nonce__og_image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/published/{map_id}/{nonce}/sprite.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published Sprite Json */
+        get: operations["published_sprite_json_maps_published__map_id___nonce__sprite_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/published/{map_id}/{nonce}/sprite.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published Sprite Png */
+        get: operations["published_sprite_png_maps_published__map_id___nonce__sprite_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/published/{map_id}/{nonce}/style.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published Style */
+        get: operations["published_style_maps_published__map_id___nonce__style_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maps/published/{map_id}/{nonce}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published Thumbnail */
+        get: operations["published_thumbnail_maps_published__map_id___nonce__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/maps/shared/{token}": {
         parameters: {
             query?: never;
@@ -8971,6 +9056,7 @@ export interface components {
             plugins?: string[] | null;
             /** Legend Title */
             legend_title?: string | null;
+            publish?: components["schemas"]["MapPublishBlock"] | null;
             /**
              * Excluded Layer Count
              * @description Layers skipped due to access restrictions
@@ -10359,6 +10445,47 @@ export interface components {
              */
             owner_id: string;
         };
+        /**
+         * MapPublishAssetUrls
+         * @description Nonce-namespaced URLs of a generation's confirmed public assets.
+         */
+        MapPublishAssetUrls: {
+            /** Style Url */
+            style_url?: string | null;
+            /** Sprite Url */
+            sprite_url?: string | null;
+            /** Sprite Json Url */
+            sprite_json_url?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Og Image Url */
+            og_image_url?: string | null;
+        };
+        /**
+         * MapPublishBlock
+         * @description Publish-generation state attached to public map responses.
+         *
+         *     Private maps return no block. ``generation_id`` targets the follow-up
+         *     thumbnail/OG-image upload; ``missing_required`` names required assets not
+         *     yet confirmed; URLs are populated once the generation is active.
+         */
+        MapPublishBlock: {
+            /**
+             * Generation Id
+             * Format: uuid
+             */
+            generation_id: string;
+            /** Generation Number */
+            generation_number: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "building" | "ready" | "active" | "superseded" | "failed" | "cancelled";
+            /** Missing Required */
+            missing_required?: string[];
+            assets?: components["schemas"]["MapPublishAssetUrls"];
+        };
         /** MapResponse */
         MapResponse: {
             /**
@@ -10422,6 +10549,7 @@ export interface components {
             plugins?: string[] | null;
             /** Legend Title */
             legend_title?: string | null;
+            publish?: components["schemas"]["MapPublishBlock"] | null;
         };
         /**
          * MapSpriteEntry
@@ -11522,6 +11650,8 @@ export interface components {
         OgImageUploadRequest: {
             /** Data Uri */
             data_uri: string;
+            /** Generation Id */
+            generation_id?: string | null;
         };
         /** PermissionsResponse */
         PermissionsResponse: {
@@ -13058,6 +13188,7 @@ export interface components {
             legend_title?: string | null;
             /** Layers */
             layers: components["schemas"]["SharedLayerResponse"][];
+            publish?: components["schemas"]["MapPublishBlock"] | null;
         };
         /**
          * SourceHealthResponse
@@ -14151,6 +14282,8 @@ export interface components {
         ThumbnailUploadRequest: {
             /** Data Uri */
             data_uri: string;
+            /** Generation Id */
+            generation_id?: string | null;
         };
         /** TileConfigResponse */
         TileConfigResponse: {
@@ -33538,6 +33671,401 @@ export interface operations {
             };
             /** @description Conflict — resource state prevents the operation */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Too many requests — retry after the advertised interval */
+            429: {
+                headers: {
+                    /** @description Seconds until the request may be retried */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Service unavailable — the database could not serve the request */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    published_og_image_maps_published__map_id___nonce__og_image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                nonce: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The generation social card */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description Bad request — invalid query parameters or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Too many requests — retry after the advertised interval */
+            429: {
+                headers: {
+                    /** @description Seconds until the request may be retried */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Service unavailable — the database could not serve the request */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    published_sprite_json_maps_published__map_id___nonce__sprite_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                nonce: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad request — invalid query parameters or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Too many requests — retry after the advertised interval */
+            429: {
+                headers: {
+                    /** @description Seconds until the request may be retried */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Service unavailable — the database could not serve the request */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    published_sprite_png_maps_published__map_id___nonce__sprite_png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                nonce: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The frozen sprite sheet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Bad request — invalid query parameters or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Too many requests — retry after the advertised interval */
+            429: {
+                headers: {
+                    /** @description Seconds until the request may be retried */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Service unavailable — the database could not serve the request */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    published_style_maps_published__map_id___nonce__style_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                nonce: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The frozen MapLibre style document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Bad request — invalid query parameters or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Too many requests — retry after the advertised interval */
+            429: {
+                headers: {
+                    /** @description Seconds until the request may be retried */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Service unavailable — the database could not serve the request */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    published_thumbnail_maps_published__map_id___nonce__thumbnail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                nonce: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The generation thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description Bad request — invalid query parameters or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

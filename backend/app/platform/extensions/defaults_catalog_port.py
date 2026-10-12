@@ -274,6 +274,16 @@ class DefaultCatalogPort:
 
         return restore_previous_version
 
+    def map_publish_build_task(self):  # type: ignore[no-untyped-def]
+        from app.processing.maps_publish.tasks import build_map_generation
+
+        return build_map_generation
+
+    async def run_map_publish_build(self, generation_id: str) -> str:
+        from app.modules.catalog.maps.service import run_map_publish_build
+
+        return await run_map_publish_build(generation_id)
+
     def refresh_stac_task(self):  # type: ignore[no-untyped-def]
         from app.processing.ingest.tasks import refresh_stac
 

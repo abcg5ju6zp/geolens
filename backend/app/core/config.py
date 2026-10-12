@@ -506,6 +506,17 @@ class Settings(AuthSettings, BaseSettings):
     # transfer off the ingest slot.
     worker_queues: str = "priority,ingest,raster,download,ingest-auth-v2"
 
+    # Map publish generations: worker lease for one build attempt, exponential
+    # backoff between asset retries, hard deadline before a generation fails,
+    # and the grace window in which a superseded generation's nonce URLs keep
+    # serving its frozen assets before GC reclaims them.
+    map_publish_lease_seconds: int = Field(default=600, gt=0)
+    map_publish_backoff_base_seconds: int = Field(default=30, gt=0)
+    map_publish_backoff_max_seconds: int = Field(default=3600, gt=0)
+    map_publish_max_attempts: int = Field(default=5, gt=0)
+    map_publish_grace_seconds: int = Field(default=7 * 86400, ge=0)
+    map_publish_bootstrap_batch: int = Field(default=20, gt=0)
+
     # CONF-04 (Phase 277 / M-39): replaces raw os.environ.get("ENV_ONLY_CONFIG") in core/public_urls.py
     # Security-relevant: when true, the PersistentConfig DB layer is bypassed for reads
     # and writes return 403. Keep in sync with .env.example.

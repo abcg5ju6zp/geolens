@@ -53,6 +53,9 @@ from app.platform.jobs.router import router as jobs_router
 from app.modules.catalog.layers.router import layers_router
 from app.modules.catalog.maps.router import router as maps_router
 from app.modules.catalog.maps.router_assets import sprites_router as maps_sprites_router
+from app.modules.catalog.maps.router_published import (
+    router as maps_published_router,
+)
 from app.modules.catalog.maps.router_ownership import router as maps_ownership_router
 from app.standards.ogc.router import ogc_features_router, ogc_router
 from app.modules.catalog.records.router import router as records_router
@@ -115,6 +118,9 @@ api_router.include_router(maps_ownership_router)
 # ERROR_RESPONSES_WRITE defaults — see the comment on sprites_router in
 # maps/router_assets.py.
 api_router.include_router(maps_sprites_router)
+# Published-generation assets are anonymous nonce reads, mounted as a sibling
+# of maps_router for the same no-write-error-responses reason as sprites.
+api_router.include_router(maps_published_router)
 api_router.include_router(ai_router)
 # feat(#565): raw sandbox SQL endpoint (POST /query/), consumed by the MCP
 # `query` tool. Auth-only; see processing/ai/query_router.py.

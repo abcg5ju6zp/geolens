@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -131,6 +132,19 @@ class Map(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Active publish generation whose frozen manifest serves anonymous/shared
+    # reads. Null = no published snapshot yet (private map, or a public map
+    # waiting for its first generation to build); the read path falls back to
+    # live rows. Only the cutover transaction writes this.
+    published_generation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "catalog.map_publish_generations.id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
     )
 
 
@@ -278,4 +292,156 @@ class MapIconAsset(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MapPublishGeneration(Base):
+    """One immutable content snapshot of a public map, awaiting or serving reads.
+
+    Content (ordered layers with pinned dataset versions and view parameters)
+    lives in ``manifest``; assets are confirmed individually in
+    MapPublishAsset. Only a generation that wins the cutover fence moves
+    ``Map.published_generation_id``; superseded generations keep their
+    staged objects until GC reclaims the generation-scoped prefix.
+    """
+
+    __tablename__ = "map_publish_generations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'building', 'ready', 'active', "
+            "'superseded', 'failed', 'cancelled')",
+            name="chk_map_publish_generations_status",
+        ),
+        CheckConstraint(
+            "origin IN ('save', 'bootstrap')",
+            name="chk_map_publish_generations_origin",
+        ),
+        UniqueConstraint(
+            "map_id",
+            "generation_number",
+            name="uq_map_publish_generations_map_number",
+        ),
+        UniqueConstraint("read_nonce", name="uq_map_publish_generations_nonce"),
+        # At most one served generation per map.
+        Index(
+            "uq_map_publish_generations_one_active",
+            "map_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        # A new save supersedes the previous in-flight generation in the same
+        # transaction that inserts its replacement, so this never holds two.
+        Index(
+            "uq_map_publish_generations_one_building",
+            "map_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'building')"),
+        ),
+        Index(
+            "ix_map_publish_generations_status_next",
+            "status",
+            "next_attempt_at",
+        ),
+        Index("ix_map_publish_generations_map_status", "map_id", "status"),
+        {"schema": "catalog"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=func.gen_random_uuid()
+    )
+    map_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("catalog.maps.id", ondelete="CASCADE"), nullable=False
+    )
+    generation_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="pending"
+    )
+    manifest: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    content_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    read_nonce: Mapped[str] = mapped_column(String(32), nullable=False)
+    origin: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="save"
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    claimed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    leased_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catalog.users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Dormant tenant column, mirrors Map.tenant_id.
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    ready_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    failed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class MapPublishAsset(Base):
+    """One staged file of a generation. ``confirmed_at`` is the CAS gate."""
+
+    __tablename__ = "map_publish_assets"
+    __table_args__ = (
+        CheckConstraint(
+            "name IN ('style', 'sprite_json', 'sprite_png', "
+            "'thumbnail', 'og_image')",
+            name="chk_map_publish_assets_name",
+        ),
+        UniqueConstraint(
+            "generation_id",
+            "name",
+            name="uq_map_publish_assets_generation_name",
+        ),
+        Index(
+            "ix_map_publish_assets_generation_unconfirmed",
+            "generation_id",
+            postgresql_where=text("confirmed_at IS NULL"),
+        ),
+        {"schema": "catalog"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, server_default=func.gen_random_uuid()
+    )
+    generation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("catalog.map_publish_generations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(20), nullable=False)
+    required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    media_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

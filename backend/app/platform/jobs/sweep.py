@@ -1501,6 +1501,20 @@ async def _stale_candidates(
     return list((await db.execute(statement)).all())
 
 
+async def _sweep_map_publish_generations(db: AsyncSession) -> None:
+    """Re-enqueue due map publish builds and reclaim terminal generations."""
+    try:
+        from app.modules.catalog.maps.service import (
+            gc_map_publish_generations,
+            recover_map_publish_generations,
+        )
+
+        await recover_map_publish_generations(db)
+        await gc_map_publish_generations(db)
+    except Exception:  # broad: housekeeping must not fail the stale-job sweep
+        log.warning("Map publish generation sweep failed", exc_info=True)
+
+
 @overload
 async def fail_stale_jobs(
     db: AsyncSession,
@@ -1666,6 +1680,7 @@ async def fail_stale_jobs(
         await reconcile_orphaned_quicklooks(db, now=now)
         await run_owed_publish_followups()
         await reclaim_retained_cogs()
+        await _sweep_map_publish_generations(db)
     if detailed:
         return outcome
     return outcome.pending_failed, outcome.running_failed

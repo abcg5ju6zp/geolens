@@ -242,8 +242,14 @@ def _normalized_import_root(name: str | None) -> str:
 
 def _is_allowed_private_service_importer(path: Path, package_path: str) -> bool:
     rel = _repo_style_rel(path)
-    return rel == f"{package_path}/service.py" or (
+    if rel == f"{package_path}/service.py" or (
         rel.startswith(f"{package_path}/service_") and rel.endswith(".py")
+    ):
+        return True
+    # The map publish-generation pipeline is maps service internals split into
+    # a subpackage; it shares the private service_* modules.
+    return package_path == "backend/app/modules/catalog/maps" and rel.startswith(
+        f"{package_path}/publish/"
     )
 
 
@@ -1170,7 +1176,8 @@ def test_analysis_sql_facade_guard_sees_every_bypass_shape() -> None:
 def test_decomposed_service_modules_stay_within_size_budgets() -> None:
     """Keep split service modules and their stable facades bounded."""
     facade_line_budgets = {
-        "backend/app/modules/catalog/maps/service.py": 104,
+        # Publish-generation preparation, build/cutover and recovery exports.
+        "backend/app/modules/catalog/maps/service.py": 142,
         "backend/app/modules/catalog/search/service.py": 80,
         "backend/app/modules/catalog/datasets/domain/service.py": 112,
         "backend/app/processing/ai/chat_service.py": 519,
@@ -1204,7 +1211,8 @@ def test_decomposed_service_modules_stay_within_size_budgets() -> None:
         # Default adapters expose explicit extension contracts rather than catch-all shims.
         "backend/app/platform/extensions/defaults_ai_openai.py": 520,
         "backend/app/platform/extensions/defaults_ai_anthropic.py": 372,
-        "backend/app/platform/extensions/defaults_catalog_port.py": 579,
+        # Map publish generations add the build-task factory and build entry.
+        "backend/app/platform/extensions/defaults_catalog_port.py": 589,
         # ProcessingPort signatures remain explicit across the catalog boundary.
         "backend/app/platform/extensions/defaults_processing_port.py": 576,
         "backend/app/platform/extensions/defaults_extensions.py": 433,
@@ -1260,11 +1268,14 @@ def test_decomposed_service_modules_stay_within_size_budgets() -> None:
 # These decomposition ceilings may shrink freely; the inclusion rule uses them
 # to avoid tracking the same module in both cap tables.
 _OPEN_CORE_SIZE_CAPS: dict[str, int] = {
-    "backend/app/modules/catalog/maps/style_json.py": 1624,
+    # Publish generations add the unsigned-tile mode and per-generation
+    # sprite_url parameter to the style builder.
+    "backend/app/modules/catalog/maps/style_json.py": 1645,
     "backend/app/modules/catalog/maps/style_import.py": 605,
     "backend/app/modules/catalog/maps/style_sanitizers.py": 151,
     "backend/app/modules/catalog/maps/router_assets.py": 161,
-    "backend/app/modules/catalog/maps/router_sharing.py": 435,
+    # Shared response carries the optional publish block through.
+    "backend/app/modules/catalog/maps/router_sharing.py": 436,
     "backend/app/modules/catalog/search/query_params.py": 205,
     "backend/app/modules/catalog/search/router_saved.py": 97,
     "backend/app/modules/admin/router_operations.py": 323,
@@ -1299,8 +1310,9 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # Application composition debt; preserve lifespan and middleware ordering when
     # splitting.
     "backend/app/api/main.py": 1751,
-    # Map request validation and published response contracts share this module.
-    "backend/app/modules/catalog/maps/schemas.py": 1396,
+    # Map request validation and published response contracts share this module;
+    # publish generations add the optional MapPublishBlock and image generation_id.
+    "backend/app/modules/catalog/maps/schemas.py": 1433,
     # Metadata facade preserves the import and patch surface used by extensions and
     # callers.
     "backend/app/processing/ingest/metadata.py": 169,
@@ -1319,7 +1331,8 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # ArcGIS requests, lifecycle context, the quicklook draw that ingest and
     # replacement share, and the swap that keeps the replaced table and records
     # the version it keeps.
-    "backend/app/processing/ingest/tasks_common.py": 1903,
+    # Worker task registry adds the map publish-generation build module.
+    "backend/app/processing/ingest/tasks_common.py": 1904,
     # File and remote-source replacement strategies own retrieval, staging and
     # verification, including the live geometry read and its witness, the
     # live-edit comparison each publication makes, and a service re-upload's
@@ -1333,14 +1346,15 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # rebuild an applied width needs share one import workflow.
     "backend/app/platform/config_ops/service.py": 1465,
     # One settlement pass, its precheck and its reapers serve startup recovery, the
-    # lifespan sweep, admin cleanup, the job status poll and manifest expiry.
-    "backend/app/platform/jobs/sweep.py": 1803,
+    # lifespan sweep, admin cleanup, the job status poll and manifest expiry; it
+    # also re-enqueues/reclaims map publish generations.
+    "backend/app/platform/jobs/sweep.py": 1818,
     # Refresh admission, claim fencing, terminal transitions and the job-scoped
     # abandoned-run sweep stay domain-neutral.
     "backend/app/platform/refresh/service.py": 1174,
     # Central settings and boot-validation debt; split by configuration domain before
-    # raising.
-    "backend/app/core/config.py": 1502,
+    # raising. Map publish lease/backoff/grace knobs ride along.
+    "backend/app/core/config.py": 1513,
     # Config resolution coordinates validation, overrides, caching, audit and side
     # effects, including model defaults that follow the selected LLM provider.
     "backend/app/core/persistent_config.py": 1158,
@@ -1380,8 +1394,9 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # Analysis validation, bounded execution and fenced registration share one task
     # lifecycle.
     "backend/app/processing/analysis/tasks.py": 1439,
-    # Map endpoints share response assembly, visibility and ownership checks.
-    "backend/app/modules/catalog/maps/router.py": 1537,
+    # Map endpoints share response assembly, visibility and ownership checks;
+    # publish generations add save preparation/dispatch and image staging.
+    "backend/app/modules/catalog/maps/router.py": 1636,
     # Native search and OGC Records share visibility, query parsing and pagination.
     "backend/app/modules/catalog/search/router.py": 1452,
     # STAC endpoints share visibility, extent, lineage and pagination conformance rules.

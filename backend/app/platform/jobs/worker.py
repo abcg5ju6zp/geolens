@@ -89,6 +89,7 @@ async def _recover_stale_jobs_for_current_scope() -> None:
     from app.processing.ingest.publish_followups import run_owed_publish_followups
 
     await run_owed_publish_followups()
+    await _recover_map_publish_generations()
     for job_id in outcome._settled_running_ids:
         log.warning("Recovered stale running job", job_id=str(job_id))
     for job_id, status in outcome._settled_pending:
@@ -111,6 +112,27 @@ async def _recover_stale_jobs_for_current_scope() -> None:
 # fails live work. Covers the final heartbeat interval (10s default) plus
 # the unregister that follows the graceful wait.
 _STALLED_SHUTDOWN_MARGIN_SECONDS = 60
+
+
+async def _recover_map_publish_generations() -> None:
+    """Re-enqueue due map publish builds and bootstrap never-generated maps.
+
+    Runs at worker startup and from the periodic sweep. Failures are logged,
+    never raised — a recovery hiccup must not block startup; the next sweep
+    repeats the pass.
+    """
+    from app.core.db import async_session
+    from app.modules.catalog.maps.service import (
+        bootstrap_public_maps,
+        recover_map_publish_generations,
+    )
+
+    try:
+        async with async_session() as session:
+            await recover_map_publish_generations(session)
+        await bootstrap_public_maps(async_session)
+    except Exception:  # broad: startup/sweep must continue regardless
+        log.warning("Map publish generation recovery failed", exc_info=True)
 
 
 def stalled_worker_seconds() -> int:

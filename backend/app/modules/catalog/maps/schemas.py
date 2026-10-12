@@ -3,7 +3,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import (
     AwareDatetime,
@@ -987,6 +987,33 @@ class MapLayerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MapPublishAssetUrls(BaseModel):
+    """Nonce-namespaced URLs of a generation's confirmed public assets."""
+
+    style_url: str | None = None
+    sprite_url: str | None = None
+    sprite_json_url: str | None = None
+    thumbnail_url: str | None = None
+    og_image_url: str | None = None
+
+
+class MapPublishBlock(BaseModel):
+    """Publish-generation state attached to public map responses.
+
+    Private maps return no block. ``generation_id`` targets the follow-up
+    thumbnail/OG-image upload; ``missing_required`` names required assets not
+    yet confirmed; URLs are populated once the generation is active.
+    """
+
+    generation_id: uuid.UUID
+    generation_number: int
+    status: Literal[
+        "pending", "building", "ready", "active", "superseded", "failed", "cancelled"
+    ]
+    missing_required: list[str] = Field(default_factory=list)
+    assets: MapPublishAssetUrls = Field(default_factory=MapPublishAssetUrls)
+
+
 class MapResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -1016,6 +1043,8 @@ class MapResponse(BaseModel):
     layer_count: int
     plugins: list[str] | None = None
     legend_title: str | None = None
+    # Null for private maps and for public maps with no generation yet.
+    publish: MapPublishBlock | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1249,6 +1278,9 @@ class SharedMapResponse(BaseModel):
     has_non_public_layers: bool = False
     legend_title: str | None = None
     layers: list[SharedLayerResponse]
+    # Present when the public map is served from an active generation: the
+    # viewer loads its nonce sprite/image URLs instead of the live globals.
+    publish: MapPublishBlock | None = None
 
 
 class ShareTokenRequest(BaseModel):
@@ -1328,6 +1360,10 @@ class ThumbnailUploadRequest(BaseModel):
     """
 
     data_uri: str = Field(min_length=22, max_length=100_000)
+    # When set, stage the image for that publish generation instead of
+    # writing the map's live thumbnail column. Null keeps the legacy direct
+    # write (private maps and older clients).
+    generation_id: uuid.UUID | None = None
 
 
 class OgImageUploadRequest(BaseModel):
@@ -1345,6 +1381,7 @@ class OgImageUploadRequest(BaseModel):
     """
 
     data_uri: str = Field(min_length=22, max_length=750_000)
+    generation_id: uuid.UUID | None = None
 
 
 class VisibilityCheckResponse(BaseModel):

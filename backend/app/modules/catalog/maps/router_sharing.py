@@ -185,7 +185,8 @@ async def get_shared_map_endpoint(
     response.headers["Content-Security-Policy"] = _build_frame_ancestors(
         allowed_origins
     )
-    return SharedMapResponse(**map_data, layers=layers)
+    publish_block = map_data.pop("publish", None)
+    return SharedMapResponse(**map_data, layers=layers, publish=publish_block)
 
 
 @router.get("/{map_id}/visibility-check/", response_model=VisibilityCheckResponse)

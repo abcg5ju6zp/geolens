@@ -140,7 +140,13 @@ logger = logging.getLogger(__name__)
 # 15 -> 16: CatalogPort gained the required ``restore_previous_version_task``
 # method, which the previous-version restore route defers. An overlay
 # replacing the ``catalog_port`` slot without it fails every restore request.
-EXTENSION_API_VERSION: int = 16
+#
+# 16 -> 17: CatalogPort gained the required ``map_publish_build_task`` method,
+# which the public-map save path defers to stage a publish generation's
+# style/sprite assets and atomically cut over the public pointer. An overlay
+# replacing the ``catalog_port`` slot without it leaves generations unbuilt
+# until the worker recovery sweep catches them.
+EXTENSION_API_VERSION: int = 17
 
 
 def check_extension_api_version(name: str, declared_version: int | None) -> None:

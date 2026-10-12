@@ -343,7 +343,7 @@ def _data_driven_columns_for_layer(layer: MapLayerResponse) -> list[str]:
     return sorted(cols)
 
 
-def _tile_url_for_layer(layer: MapLayerResponse) -> str:
+def _tile_url_for_layer(layer: MapLayerResponse, *, unsigned: bool = False) -> str:
     if (
         layer.layer_type == "raster_geolens"
         or layer.dataset_record_type in RASTER_FAMILY_RECORD_TYPES
@@ -353,6 +353,14 @@ def _tile_url_for_layer(layer: MapLayerResponse) -> str:
         # or a publication transition bumps either counter.
         return f"/raster-tiles/{layer.dataset_id}/tiles/{{z}}/{{x}}/{{y}}.png" + (
             tile_template_query(layer.tile_version, layer.publication_version)
+        )
+    if unsigned:
+        # Publish generations freeze the style document in object storage,
+        # where a signed template's 15-minute expiry would outlive it. The
+        # anonymous shared read uses the same unsigned ?pv= shape
+        # (service_public._build_shared_layer_dict).
+        return f"/tiles/data.{layer.dataset_table_name}/{{z}}/{{x}}/{{y}}.pbf" + (
+            tile_template_query(None, layer.publication_version)
         )
     port = get_catalog_port()
     exp = port.round_tile_expiry()
@@ -373,24 +381,28 @@ def _tile_url_for_layer(layer: MapLayerResponse) -> str:
     return f"/tiles/data.{layer.dataset_table_name}/{{z}}/{{x}}/{{y}}.pbf?{query}"
 
 
-def _raster_dem_source(layer: MapLayerResponse) -> dict[str, Any]:
+def _raster_dem_source(
+    layer: MapLayerResponse, *, unsigned: bool = False
+) -> dict[str, Any]:
     return {
         "type": "raster-dem",
-        "tiles": [_tile_url_for_layer(layer)],
+        "tiles": [_tile_url_for_layer(layer, unsigned=unsigned)],
         "tileSize": 256,
         "encoding": "mapbox",
     }
 
 
-def _source_for_layer(layer: MapLayerResponse) -> dict[str, Any]:
+def _source_for_layer(
+    layer: MapLayerResponse, *, unsigned: bool = False
+) -> dict[str, Any]:
     source: dict[str, Any]
     source_type = _source_type_for_layer(layer)
     if source_type == "raster-dem":
-        source = _raster_dem_source(layer)
+        source = _raster_dem_source(layer, unsigned=unsigned)
     elif source_type == "raster":
         source = {
             "type": "raster",
-            "tiles": [_tile_url_for_layer(layer)],
+            "tiles": [_tile_url_for_layer(layer, unsigned=unsigned)],
             "tileSize": 256,
         }
     else:
@@ -400,7 +412,7 @@ def _source_for_layer(layer: MapLayerResponse) -> dict[str, Any]:
         is_cluster = (layer.style_config or {}).get("render_mode") == "cluster"
         source = {
             "type": "vector",
-            "tiles": [_tile_url_for_layer(layer)],
+            "tiles": [_tile_url_for_layer(layer, unsigned=unsigned)],
             "minzoom": 1,
             "maxzoom": 22 if is_cluster else 14,
         }
@@ -1465,12 +1477,19 @@ def build_maplibre_style(
     *,
     mvt_source_layer_prefix: str = "data",
     terrain_dataset_ids: Iterable[Any] | None = None,
+    sprite_url: str = SPRITE_URL,
+    tile_template_mode: str = "signed",
 ) -> dict[str, Any]:
     """Build a complete MapLibre style document from saved map data.
 
     The terrain binding is kept only when its DEM is in ``terrain_dataset_ids``,
     which defaults to the layers' datasets.
+
+    ``tile_template_mode="public_unsigned"`` emits the anonymous shared
+    template (pv only, no HMAC) for frozen publish-generation documents; the
+    default signed template stays on the authenticated export path.
     """
+    unsigned_tiles = tile_template_mode == "public_unsigned"
 
     sources: dict[str, Any] = {}
     style_layers: list[dict[str, Any]] = []
@@ -1487,7 +1506,7 @@ def build_maplibre_style(
                 _append_cluster_source_metadata(sources[source_id], layer)
                 new_source = None
             else:
-                new_source = _source_for_layer(layer)
+                new_source = _source_for_layer(layer, unsigned=unsigned_tiles)
         except _MALFORMED_STYLE_ERRORS:
             logger.warning(
                 "Dropping map layer %s from the exported style: its stored "
@@ -1561,7 +1580,9 @@ def build_maplibre_style(
             if terrain_layer is not None:
                 mesh_source_id = f"geolens-terrain-{_safe_id(terrain_dataset_id)}"
                 if mesh_source_id not in sources:
-                    mesh_source = _raster_dem_source(terrain_layer)
+                    mesh_source = _raster_dem_source(
+                        terrain_layer, unsigned=unsigned_tiles
+                    )
                     mesh_source["metadata"] = {
                         "geolens": {
                             "dataset_id": terrain_dataset_id,
@@ -1594,7 +1615,7 @@ def build_maplibre_style(
                 "terrain_config": tc,
             }
         },
-        "sprite": [{"id": GEOLENS_SPRITE_ID, "url": SPRITE_URL}],
+        "sprite": [{"id": GEOLENS_SPRITE_ID, "url": sprite_url}],
         "glyphs": GLYPHS_URL,
         "sources": sources,
         "layers": style_layers,

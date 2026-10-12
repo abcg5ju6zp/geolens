@@ -57,6 +57,28 @@ from app.modules.catalog.maps.service_shared import (
     generate_default_style,
     get_dataset_meta,
 )
+from app.modules.catalog.maps.publish.block import build_publish_block
+from app.modules.catalog.maps.publish.cutover import (
+    activate_generation,
+    run_map_publish_build,
+)
+from app.modules.catalog.maps.publish.gc import (
+    bootstrap_public_maps,
+    gc_map_publish_generations,
+    purge_map_publish_namespace,
+    recover_map_publish_generations,
+)
+from app.modules.catalog.maps.publish.service_publish import (
+    active_generation,
+    assets_by_name,
+    cancel_in_flight_publications,
+    dispatch_map_publication,
+    generation_by_nonce,
+    latest_generation,
+    missing_required_assets,
+    prepare_map_publication,
+)
+from app.modules.catalog.maps.publish.uploads import stage_generation_image
 
 __all__ = [
     "MapAssetPublication",
@@ -101,4 +123,20 @@ __all__ = [
     "_apply_map_visibility_filter",
     "_infer_layer_type",
     "_validate_share_token",
+    "prepare_map_publication",
+    "dispatch_map_publication",
+    "cancel_in_flight_publications",
+    "build_publish_block",
+    "latest_generation",
+    "active_generation",
+    "generation_by_nonce",
+    "assets_by_name",
+    "missing_required_assets",
+    "run_map_publish_build",
+    "activate_generation",
+    "recover_map_publish_generations",
+    "gc_map_publish_generations",
+    "bootstrap_public_maps",
+    "purge_map_publish_namespace",
+    "stage_generation_image",
 ]

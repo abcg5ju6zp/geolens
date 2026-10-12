@@ -18,6 +18,7 @@ import datetime
 if TYPE_CHECKING:
     from ..models.basemap_config import BasemapConfig
     from ..models.map_layer_response import MapLayerResponse
+    from ..models.map_publish_block import MapPublishBlock
     from ..models.terrain_config import TerrainConfig
 
 
@@ -54,6 +55,7 @@ class DuplicateMapResponse:
         created_by_username (None | str | Unset):
         plugins (list[str] | None | Unset):
         legend_title (None | str | Unset):
+        publish (MapPublishBlock | None | Unset):
         excluded_layer_count (int | Unset): Layers skipped due to access restrictions Default: 0.
     """
 
@@ -83,11 +85,13 @@ class DuplicateMapResponse:
     created_by_username: None | str | Unset = UNSET
     plugins: list[str] | None | Unset = UNSET
     legend_title: None | str | Unset = UNSET
+    publish: MapPublishBlock | None | Unset = UNSET
     excluded_layer_count: int | Unset = 0
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.basemap_config import BasemapConfig
+        from ..models.map_publish_block import MapPublishBlock
         from ..models.terrain_config import TerrainConfig
 
         id = str(self.id)
@@ -202,6 +206,14 @@ class DuplicateMapResponse:
         else:
             legend_title = self.legend_title
 
+        publish: dict[str, Any] | None | Unset
+        if isinstance(self.publish, Unset):
+            publish = UNSET
+        elif isinstance(self.publish, MapPublishBlock):
+            publish = self.publish.to_dict()
+        else:
+            publish = self.publish
+
         excluded_layer_count = self.excluded_layer_count
 
         field_dict: dict[str, Any] = {}
@@ -246,6 +258,8 @@ class DuplicateMapResponse:
             field_dict["plugins"] = plugins
         if legend_title is not UNSET:
             field_dict["legend_title"] = legend_title
+        if publish is not UNSET:
+            field_dict["publish"] = publish
         if excluded_layer_count is not UNSET:
             field_dict["excluded_layer_count"] = excluded_layer_count
 
@@ -255,6 +269,7 @@ class DuplicateMapResponse:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.basemap_config import BasemapConfig
         from ..models.map_layer_response import MapLayerResponse
+        from ..models.map_publish_block import MapPublishBlock
         from ..models.terrain_config import TerrainConfig
 
         d = dict(src_dict)
@@ -452,6 +467,23 @@ class DuplicateMapResponse:
 
         legend_title = _parse_legend_title(d.pop("legend_title", UNSET))
 
+        def _parse_publish(data: object) -> MapPublishBlock | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                publish_type_0 = MapPublishBlock.from_dict(data)
+
+                return publish_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(MapPublishBlock | None | Unset, data)
+
+        publish = _parse_publish(d.pop("publish", UNSET))
+
         excluded_layer_count = d.pop("excluded_layer_count", UNSET)
 
         duplicate_map_response = cls(
@@ -481,6 +513,7 @@ class DuplicateMapResponse:
             created_by_username=created_by_username,
             plugins=plugins,
             legend_title=legend_title,
+            publish=publish,
             excluded_layer_count=excluded_layer_count,
         )
 
