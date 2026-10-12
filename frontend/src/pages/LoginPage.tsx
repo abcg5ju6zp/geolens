@@ -17,6 +17,7 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useBranding } from '@/hooks/use-settings';
 import { useEdition } from '@/hooks/use-edition';
 import { isSafeHttpUrl } from '@/lib/safe-http-url';
+import { postSignInPath } from '@/lib/post-sign-in-path';
 import { writeSessionStorage } from '@/lib/storage';
 
 function getOAuthErrorMessage(error: string, t: (key: string, opts?: Record<string, string>) => string): string {
@@ -220,9 +221,7 @@ export function LoginPage() {
 
   if (token) {
     const from = (location.state as { from?: string } | null)?.from;
-    // The root route is the canonical search workspace.
-    const target = from && from.startsWith('/') ? from : '/';
-    return <Navigate to={target} replace />;
+    return <Navigate to={postSignInPath(from)} replace />;
   }
 
   if (configLoading) {
