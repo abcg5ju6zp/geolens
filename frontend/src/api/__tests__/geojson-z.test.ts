@@ -1,4 +1,4 @@
-import { fetchBoundedGeoJson, fetchGeoJsonZ, asFeatureCollection } from '@/api/geojson-z';
+import { fetchBoundedGeoJson, asFeatureCollection } from '@/api/geojson-z';
 import { useAuthStore } from '@/stores/auth-store';
 
 vi.mock('@/api/auth', () => ({
@@ -74,18 +74,6 @@ describe('fetchBoundedGeoJson', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/datasets/dataset-1/features.geojson',
       { headers: { 'X-Api-Key': 'key 1' }, signal: expect.any(AbortSignal) },
-    );
-  });
-
-  it('keeps fetchGeoJsonZ as a compatibility alias', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(boundedGeoJson));
-
-    const response = await fetchGeoJsonZ('dataset-1', { apiKey: 'key' });
-
-    expect(response).toEqual(boundedGeoJson);
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/datasets/dataset-1/features.geojson',
-      { headers: { 'X-Api-Key': 'key' }, signal: expect.any(AbortSignal) },
     );
   });
 

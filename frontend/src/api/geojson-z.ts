@@ -18,8 +18,6 @@ export interface GeoJsonFetchOptions {
   signal?: AbortSignal;
 }
 
-export type GeoJsonZResponse = BoundedGeoJsonResponse;
-
 function boundedGeoJsonPath(datasetId: string) {
   return `/datasets/${datasetId}/features.geojson`;
 }
@@ -93,15 +91,4 @@ export async function fetchBoundedGeoJson(
 
   // Default: JWT auth via apiFetch
   return apiFetch<BoundedGeoJsonResponse>(boundedGeoJsonPath(datasetId), { signal });
-}
-
-/**
- * Fetch GeoJSON with Z coordinates for a dataset.
- * Handles JWT auth (via apiFetch), API key, and embed token paths.
- */
-export async function fetchGeoJsonZ(
-  datasetId: string,
-  options?: GeoJsonFetchOptions,
-): Promise<GeoJsonZResponse> {
-  return fetchBoundedGeoJson(datasetId, options);
 }
