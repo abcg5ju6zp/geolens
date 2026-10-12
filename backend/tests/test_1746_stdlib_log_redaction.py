@@ -102,7 +102,7 @@ def _emit_through_real_pipeline(
     worker's first job line is a DEBUG one, and the structured half of a
     record is far easier to assert on when the renderer emits JSON.
     """
-    with configured_logging(json_logs=json_logs, log_level=log_level, production=True):
+    with configured_logging(json_logs=json_logs, log_level=log_level):
         root = logging.getLogger()
         capture = _ListHandler()
         capture.setFormatter(root.handlers[0].formatter)
@@ -442,7 +442,7 @@ def test_setup_logging_derives_httpx_floor_from_root(log_level, expected_httpx_l
     point: root stricter than WARNING (ERROR here) raises httpx to match;
     root laxer than WARNING (INFO, DEBUG) leaves httpx pinned at WARNING.
     """
-    with configured_logging(json_logs=False, log_level=log_level, production=True):
+    with configured_logging(json_logs=False, log_level=log_level):
         assert logging.getLogger("httpx").level == expected_httpx_level
         assert logging.getLogger("httpcore").level == expected_httpx_level
 
@@ -485,7 +485,7 @@ def _emit_exception_through_real_pipeline(exc: Exception) -> tuple[str, dict]:
     `exception` field, and `json_logs=True` so the captured line is parseable
     JSON rather than an ANSI-colored console line.
     """
-    with configured_logging(json_logs=True, log_level="INFO", production=True):
+    with configured_logging(json_logs=True, log_level="INFO"):
         root = logging.getLogger()
         capture = _ListHandler()
         capture.setFormatter(root.handlers[0].formatter)
@@ -561,7 +561,7 @@ def test_dev_console_exception_is_scrubbed_and_has_no_locals():
     `exception` exists, scrubbed, before ANY renderer runs), and dev's
     renderer is `plain_traceback`, which never touches locals at all.
     """
-    with configured_logging(json_logs=False, production=False, log_level="INFO"):
+    with configured_logging(json_logs=False, log_level="INFO"):
         root = logging.getLogger()
         capture = _ListHandler()
         capture.setFormatter(root.handlers[0].formatter)

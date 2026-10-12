@@ -3218,7 +3218,7 @@ def _captured_lines():
     handler to the stdlib root logger with the formatter ``setup_logging()``
     installed.
     """
-    with configured_logging(json_logs=True, log_level="DEBUG", production=True):
+    with configured_logging(json_logs=True, log_level="DEBUG"):
         root = logging.getLogger()
         capture = _ListHandler()
         capture.setFormatter(root.handlers[0].formatter)

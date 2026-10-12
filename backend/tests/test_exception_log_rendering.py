@@ -110,7 +110,7 @@ def test_production_config_has_no_rich_traceback_renderer(json_logs: bool) -> No
     settings. The reported incident ran with ENVIRONMENT=production and the
     compose default LOG_JSON=false, which is the console branch.
     """
-    with configured_logging(json_logs=json_logs, production=True):
+    with configured_logging(json_logs=json_logs):
         assert _rich_formatters_in_play() == []
 
 
@@ -121,7 +121,7 @@ def test_production_console_renderer_uses_plain_traceback() -> None:
     source lines and no locals, so its cost tracks stack depth rather than the
     size of anything the frames happen to hold.
     """
-    with configured_logging(json_logs=False, production=True):
+    with configured_logging(json_logs=False):
         renderer = _current_formatter().processors[-1]
 
         assert isinstance(renderer, structlog.dev.ConsoleRenderer)
@@ -135,7 +135,7 @@ def test_production_resolves_exc_info_before_the_renderer(json_logs: bool) -> No
     This is the structural half of the fix. It also covers stdlib records,
     because the same list is the ProcessorFormatter's `foreign_pre_chain`.
     """
-    with configured_logging(json_logs=json_logs, production=True):
+    with configured_logging(json_logs=json_logs):
         chain = structlog.get_config()["processors"]
         foreign_chain = _current_formatter().foreign_pre_chain
 
@@ -155,7 +155,7 @@ def test_development_console_renderer_uses_plain_traceback_too() -> None:
     about, not merely a perf compromise. Dev and production now build this
     renderer identically.
     """
-    with configured_logging(json_logs=False, production=False):
+    with configured_logging(json_logs=False):
         renderer = _current_formatter().processors[-1]
 
         assert isinstance(renderer, structlog.dev.ConsoleRenderer)
@@ -184,7 +184,7 @@ async def test_middleware_exception_logs_plain_traceback(capsys) -> None:
     app = Starlette(routes=[Route("/boom", boom)])
     app.add_middleware(logging_mw.RequestLoggingMiddleware)
 
-    with configured_logging(json_logs=False, log_level="INFO", production=True):
+    with configured_logging(json_logs=False, log_level="INFO"):
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as http:
@@ -219,7 +219,7 @@ def test_emitted_traceback_is_independent_of_local_size() -> None:
 
     def render_traceback(repeats: int) -> str:
         stream = StringIO()
-        with configured_logging(json_logs=False, log_level="INFO", production=True):
+        with configured_logging(json_logs=False, log_level="INFO"):
             logging.getLogger().handlers[0].setStream(stream)
             try:
                 _raise_with_fat_local(repeats)

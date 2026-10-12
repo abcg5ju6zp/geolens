@@ -477,7 +477,7 @@ async def _execute_chat_tool(
                     title = getattr(getattr(dataset, "record", None), "title", None)
                     if title:
                         result["dataset_name"] = title
-            except Exception:  # noqa: BLE001 — name lookup is best-effort; never block the add
+            except Exception:  # broad: name lookup is best-effort; never block the add
                 logger.debug(
                     "add_layer.dataset_name_lookup_failed", dataset_id=str(raw_id)
                 )

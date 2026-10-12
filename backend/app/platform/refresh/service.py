@@ -62,7 +62,7 @@ RUN_ORIGIN_KINDS: tuple[str, ...] = (
 
 # How long a run may sit in pending/running before the sweep is allowed to
 # consider it abandoned. Matches the ingest stale-job abandonment policy in
-# platform/jobs/router.py. A legitimately long GDAL run is protected by the
+# platform/jobs/sweep.py. A legitimately long GDAL run is protected by the
 # live-Procrastinate-job predicate below rather than by this number, so the
 # cutoff only has to be longer than the gap between dispatch and claim.
 ABANDONED_RUN_CUTOFF_SECONDS = 3600

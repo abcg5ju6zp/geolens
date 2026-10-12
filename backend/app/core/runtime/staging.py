@@ -16,9 +16,9 @@ import structlog
 log = structlog.get_logger()
 
 
-# ING-04 (P2-04): exports temp-dir sweep age threshold. Entries older than this
+# Exports temp-dir sweep age threshold. Entries older than this
 # are deleted on startup; matches worker stale-job recovery's
-# `JOB_TIMEOUT_SECONDS` (jobs/router.py) so an export surviving a rolling
+# `JOB_TIMEOUT_SECONDS` (platform/jobs/sweep.py) so an export surviving a rolling
 # restart at the job layer also keeps its on-disk staging artifact.
 EXPORTS_SWEEP_AGE_SECONDS = 3600  # 1 hour
 

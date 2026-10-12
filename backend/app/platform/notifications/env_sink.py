@@ -102,7 +102,7 @@ class EnvConfiguredNotificationSink:
                     channel=name,
                     event_type=getattr(notification, "event_type", "unknown"),
                 )
-            except Exception as exc:  # noqa: BLE001 — per-channel isolation
+            except Exception as exc:  # broad: per-channel isolation
                 # Safe error string: type name only — never the exception
                 # message (which may echo the SMTP password or webhook URL).
                 safe_msg = type(exc).__name__

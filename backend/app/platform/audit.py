@@ -152,7 +152,7 @@ async def _emit_isolated(
             )
             if staged:
                 await session.flush(staged)
-    except Exception:  # noqa: BLE001 - audit sinks must not break callers
+    except Exception:  # broad: audit sinks must not break callers
         logger.exception(
             "Audit sink raised; suppressed per AUDIT-03",
             sink=type(sink).__name__,

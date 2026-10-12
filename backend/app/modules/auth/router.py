@@ -783,7 +783,7 @@ async def resend_verification(
                 error_type=type(exc).__name__,
                 user_id=str(user.id),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # broad: resend must return the generic response even if sending fails
             _log.warning(
                 "resend_verification.unexpected_error",
                 error_type=type(exc).__name__,

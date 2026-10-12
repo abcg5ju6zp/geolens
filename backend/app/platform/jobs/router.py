@@ -1,8 +1,7 @@
 """Job status API endpoints: poll ingestion job progress and retry.
 
-The stale-job recovery/sweep handlers split out into ``sweep.py`` (#1335);
-this module keeps the job CRUD routes and re-exports what it imports from
-there for backward compatibility.
+The stale-job recovery/sweep handlers live in ``sweep.py``; this module
+keeps the job CRUD routes and re-exports what it imports from there.
 """
 
 import uuid

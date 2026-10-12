@@ -17,8 +17,8 @@ from app.platform.jobs.models import IngestJob
 
 HEARTBEAT_INTERVAL_SECONDS = 30.0
 
-# fix(#691): lease shared by the materialize cap (router_analysis.py) and the
-# job-status auto-fail (platform/jobs/router.py), so API and poller agree. 10x
+# Lease shared by the materialize cap (router_analysis.py) and the
+# job-status auto-fail (platform/jobs/sweep.py), so API and poller agree. 10x
 # the renewal interval so one missed renewal can't admit a second concurrent CTAS.
 ANALYSIS_MATERIALIZE_LEASE_SECONDS = 300.0
 

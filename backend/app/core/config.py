@@ -276,10 +276,10 @@ BCRYPT_MAX_PASSWORD_BYTES = 72
 # processing/ingest/presigned.py, because core must never import processing.
 MIN_SIGNABLE_JOB_LIFETIME_SECONDS = 60
 
-# fix(#1236): the SigV4 ceiling. No presigned URL can outlive `created_at`
+# The SigV4 ceiling. No presigned URL can outlive `created_at`
 # plus this many seconds, whatever `pending_job_timeout_seconds` was set to
 # when it was signed; the post-expiry sweep in
-# `_sweep_expired_presigned_staging` (platform/jobs/router.py) uses it as the
+# `_sweep_expired_presigned_staging` (platform/jobs/sweep.py) uses it as the
 # age past which a marked-reaped row is safe to consider settled for good.
 MAX_PRESIGNED_URL_LIFETIME_SECONDS = 604800
 
@@ -335,16 +335,16 @@ class Settings(AuthSettings, BaseSettings):
     # has stored an override keep their stored list and must add new
     # extensions (e.g. .parquet) themselves in Admin → Storage.
     upload_allowed_extensions: str = ".zip,.gpkg,.geojson,.json,.csv,.tif,.tiff,.xlsx,.xls,.parquet,.fgb,.kml,.kmz,.3tz,.laz"
-    # fix(#1236): capped at S3's single-PUT hard limit (5GiB). The invariant
-    # that actually matters is enforced in code, not config -- see the clamp
-    # in `recheck_transfer_margin_seconds()` (platform/jobs/router.py).
+    # Capped at S3's single-PUT hard limit (5GiB). The invariant that
+    # actually matters is enforced in code, not config -- see
+    # `_RECHECK_TRANSFER_MARGIN_SECONDS` (platform/jobs/sweep.py).
     presigned_multipart_threshold_mb: int = Field(default=100, gt=0, le=5120)
-    # fix(#1234): a presigned job is abandoned after this long, and its part
+    # A presigned job is abandoned after this long, and its part
     # URLs must not outlive it. Lives here (not platform/jobs) because
     # platform/storage must read it too and platform/jobs already imports
     # platform/storage, so the reverse import would cycle.
     #
-    # fix(#1235): bounded at MAX_PRESIGNED_URL_LIFETIME_SECONDS (the SigV4
+    # Bounded at MAX_PRESIGNED_URL_LIFETIME_SECONDS (the SigV4
     # ceiling) and floored above MIN_SIGNABLE_JOB_LIFETIME_SECONDS (where
     # `require_signable_job_lifetime` always refuses to sign) -- either
     # extreme boots clean but makes every upload fail. The floor only
@@ -352,8 +352,8 @@ class Settings(AuthSettings, BaseSettings):
     # can still eat the remaining lifetime at any setting.
     #
     # Lowering it mid-flight is not a leak: issued URLs keep their old
-    # lifetime, and the sweep's re-check pass (fix(#1236),
-    # `_sweep_expired_presigned_staging` in platform/jobs/router.py)
+    # lifetime, and the sweep's re-check pass
+    # (`_sweep_expired_presigned_staging` in platform/jobs/sweep.py)
     # revisits anything reaped once MAX_PRESIGNED_URL_LIFETIME_SECONDS has
     # passed since creation -- the latest any such URL can still be live.
     pending_job_timeout_seconds: int = Field(

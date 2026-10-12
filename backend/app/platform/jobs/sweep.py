@@ -1,9 +1,9 @@
-"""Stale-job recovery and sweep handlers (#1335 split from jobs/router.py).
+"""Stale-job recovery and sweep handlers.
 
 Stale predicates for ``IngestJob`` and VRT ``RasterAsset``/``VrtGeneration``,
 their reconciliation SQL, and the staged-artifact reapers, shared by the
 lifespan sweeper, worker startup recovery, and the admin cleanup endpoint in
-``router.py``, which re-exports these names for backward compatibility.
+``router.py``, which re-exports these names.
 """
 
 import uuid
@@ -327,7 +327,7 @@ _STAGING_REAPED_MARKER = STAGING_REAPED_MARKER
 # carrying it are excluded from every future pass.
 _STAGING_REAPED_FINAL_MARKER = STAGING_REAPED_FINAL_MARKER
 
-# fix(#1236): SigV4 bounds when a URL may be SIGNED, not when an accepted
+# SigV4 bounds when a URL may be SIGNED, not when an accepted
 # PUT finishes transferring, so the re-check waits out S3's single-PUT
 # ceiling at a slow rate; `expected_size` is never enforced.
 _MIN_ASSUMED_UPLOAD_KBPS = 32  # ~256kbit/s: slow, but a still-progressing PUT

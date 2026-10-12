@@ -293,7 +293,9 @@ def _redact_sensitive_fields(
             # whole log line. Falling back to a placeholder keeps the line.
             try:
                 event_dict[key] = redact_nested(value)
-            except Exception:  # noqa: BLE001 - see comment above
+            except (
+                Exception
+            ):  # broad: a hostile container must not cost the whole log line
                 event_dict[key] = "[UNREDACTABLE]"
     event = event_dict.get("event")
     if isinstance(event, str):

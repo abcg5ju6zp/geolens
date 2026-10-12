@@ -907,7 +907,9 @@ async def send_test_notification(
                 NotificationTestChannelResult(channel=name, ok=True, error=None)
             )
             any_ok = True
-        except Exception as exc:  # noqa: BLE001 — per-channel isolation; channel failure → 200 body, not 5xx
+        except (
+            Exception
+        ) as exc:  # broad: per-channel isolation; channel failure → 200 body, not 5xx
             # Safe error string: exception TYPE name + short class-level message only.
             # NEVER interpolate exc.args or str(exc) — those may echo the SMTP
             # password, webhook URL, or webhook secret (T-1229-09).

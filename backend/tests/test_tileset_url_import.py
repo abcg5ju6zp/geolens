@@ -604,7 +604,7 @@ def captured_logs():
         events.append(json.dumps(event_dict, default=str))
         return event_dict
 
-    with configured_logging(json_logs=True, log_level="DEBUG", production=True):
+    with configured_logging(json_logs=True, log_level="DEBUG"):
         structlog.configure(processors=[_record, *structlog.get_config()["processors"]])
         root = logging.getLogger()
         lines = _Lines()

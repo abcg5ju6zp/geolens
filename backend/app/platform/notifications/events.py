@@ -147,7 +147,7 @@ async def emit_event_safe(
             result = await notify(notification)
         else:
             result = await notify(notification, channels=channels)
-    except Exception as exc:  # noqa: BLE001 — notification must never break callers
+    except Exception as exc:  # broad: notification must never break callers
         # Log only the exception type — never the notification body or any secret.
         logger.warning(
             "emit_event_safe: notification failed; suppressed",

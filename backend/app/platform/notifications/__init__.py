@@ -67,7 +67,7 @@ async def notify(
         if isinstance(sink, DefaultNotificationSink):
             try:
                 await sink.deliver(notification)
-            except Exception:  # noqa: BLE001 - no-op must never raise
+            except Exception:  # broad: no-op must never raise
                 logger.exception(
                     "DefaultNotificationSink raised unexpectedly; suppressed",
                     sink=type(sink).__name__,
@@ -89,7 +89,7 @@ async def notify(
                 if failures and not sent:
                     raise NotificationDeliveryError("every channel failed")
             delivered += 1
-        except Exception as exc:  # noqa: BLE001 - sinks must not break callers
+        except Exception as exc:  # broad: sinks must not break callers
             # SAFE error only: type name + short message. NEVER interpolate
             # notification.body, smtp_password, webhook_url, or any other
             # secret/payload value (T-1229-01/T-1229-03).
