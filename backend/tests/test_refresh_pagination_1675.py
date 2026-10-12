@@ -172,6 +172,8 @@ async def test_finalization_fence_blocks_a_local_edit_after_the_run_baseline(
             occurrence_key=f"local-edit-fence:{uuid.uuid4()}",
             claim_deadline=datetime.now(timezone.utc),
             execution_key=uuid.uuid4(),
+            schedule_version="v1",
+            phase="ingesting",
             local_edit_baseline=baseline,
             source_binding_fingerprint=canonical_service_source_binding_fingerprint(
                 dataset.origin_ref
@@ -238,6 +240,8 @@ async def test_finalization_fence_blocks_a_source_rebind_before_publication(
             occurrence_key=f"source-fence:{uuid.uuid4()}",
             claim_deadline=datetime.now(timezone.utc),
             execution_key=uuid.uuid4(),
+            schedule_version="v1",
+            phase="ingesting",
             source_binding_fingerprint=canonical_service_source_binding_fingerprint(
                 dataset.origin_ref
             ),

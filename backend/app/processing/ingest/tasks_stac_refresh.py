@@ -38,6 +38,8 @@ from app.core.service_tokens import (
 
 from app.core.db.tenant_session import tenant_task
 from app.platform.dataset_origin import set_dataset_origin
+from app.platform.refresh.errors import is_transient_run_code
+from app.platform.refresh.publication_fence import enforce_publication_fence
 from app.platform.refresh.credentials import (
     CredentialExpiredError,
     CredentialStoreUnavailable,
@@ -547,6 +549,7 @@ class _StacRefresh:
         self.bound = _binding(dataset)
         self.origin_ref = dataset.origin_ref
         self.dataset_id = dataset.id
+        self.job_id = job.id
 
     async def fetch(self) -> None:
         from app.platform.extensions import get_processing_port
@@ -604,6 +607,7 @@ class _StacRefresh:
                 .execution_options(populate_existing=True)
             )
         ).scalar_one()
+        await enforce_publication_fence(session, job_id=self.job_id, dataset=dataset)
         if _binding(dataset) != self.bound:
             raise StacRefreshError(
                 "This dataset's source changed while its STAC item was "
@@ -704,6 +708,7 @@ class _StacRefresh:
             else None,
             # A rebind overtook the answer, and the message says to refresh again.
             notify=code != _ERROR_CODE_SUPERSEDED,
+            transient=is_transient_run_code(code),
         )
 
     async def release(

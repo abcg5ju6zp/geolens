@@ -1323,8 +1323,10 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # File and remote-source replacement strategies own retrieval, staging and
     # verification, including the live geometry read and its witness, the
     # live-edit comparison each publication makes, and a service re-upload's
-    # review of the changes its preview showed.
-    "backend/app/processing/ingest/tasks_reupload.py": 1592,
+    # review of the changes its preview showed. The publication fence moved
+    # to platform/refresh/publication_fence.py; transient re-drives added the
+    # source-unavailable classification.
+    "backend/app/processing/ingest/tasks_reupload.py": 1553,
     # Refresh strategies share access, admission and dispatch rules at this API
     # boundary, including task-capability selection and accepting a held run
     # by the door it came through.
@@ -1336,8 +1338,10 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # lifespan sweep, admin cleanup, the job status poll and manifest expiry.
     "backend/app/platform/jobs/sweep.py": 1803,
     # Refresh admission, claim fencing, terminal transitions and the job-scoped
-    # abandoned-run sweep stay domain-neutral.
-    "backend/app/platform/refresh/service.py": 1174,
+    # abandoned-run sweep stay domain-neutral. Delivery phases, schedule
+    # version, occurrence identity lookups and version-link reconciliation
+    # added their rows here; redrive decisions live in reconcile.py.
+    "backend/app/platform/refresh/service.py": 1357,
     # Central settings and boot-validation debt; split by configuration domain before
     # raising.
     "backend/app/core/config.py": 1502,
@@ -1354,7 +1358,7 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # superseded-object cleanup.
     "backend/app/processing/ingest/tasks_vrt.py": 1650,
     # Raster replacement owns conversion, read-back and published-object cleanup.
-    "backend/app/processing/ingest/tasks_raster_replace.py": 614,
+    "backend/app/processing/ingest/tasks_raster_replace.py": 618,
     # File and remote-source imports own publication fencing, heartbeat phases
     # and failure settlement.
     "backend/app/processing/ingest/tasks_vector.py": 1168,
@@ -1373,8 +1377,8 @@ _MODULE_LOC_CAPS: dict[str, int] = {
     # orchestration boundary.
     "backend/app/processing/ingest/service.py": 1572,
     # The PostGIS strategy: geometry and gid repair, the snapshot measurement and
-    # its catalog writes.
-    "backend/app/processing/ingest/tasks_postgis_refresh.py": 699,
+    # its catalog writes, plus the shared keyed-run publication fence call.
+    "backend/app/processing/ingest/tasks_postgis_refresh.py": 707,
     # Dataset request and verification response families share this public contract.
     "backend/app/modules/catalog/datasets/domain/schemas.py": 1803,
     # Analysis validation, bounded execution and fenced registration share one task

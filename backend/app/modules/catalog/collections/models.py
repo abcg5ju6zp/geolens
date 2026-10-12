@@ -95,6 +95,16 @@ class DatasetVersion(Base):
     __tablename__ = "dataset_versions"
     __table_args__ = (
         UniqueConstraint("dataset_id", "version_number", name="uq_dataset_version"),
+        # The durable publish fact: at most one version per ingest job. Lets
+        # refresh-run reconciliation force a crashed run to succeeded from the
+        # version its commit left behind. NULL for initial ingests and the
+        # postgis/stac doors that publish no version.
+        Index(
+            "uq_dataset_versions_ingest_job",
+            "ingest_job_id",
+            unique=True,
+            postgresql_where=text("ingest_job_id IS NOT NULL"),
+        ),
         # DBM-10 covering index added in migration 0001_baseline.
         Index("ix_dataset_versions_dataset_id", "dataset_id"),
         Index(
@@ -126,6 +136,10 @@ class DatasetVersion(Base):
     restored_from_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("catalog.users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The unique ingest job that published this version; SET NULL on job purge.
+    ingest_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catalog.ingest_jobs.id", ondelete="SET NULL"), nullable=True
     )
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

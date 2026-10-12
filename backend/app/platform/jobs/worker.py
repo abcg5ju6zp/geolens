@@ -513,29 +513,39 @@ async def run_terminal_job_purges() -> None:
 
 
 # Scheduled refreshes use an immutable short claim deadline rather than the
-# hour-long generic ingest timeout. This neutral core sweep releases the
-# active-run reservation if an optional overlay scheduler enqueued work that no
-# live subscriber ever claims.
-SCHEDULED_REFRESH_EXPIRY_SWEEP_INTERVAL_SECONDS = 60
+# hour-long generic ingest timeout. This neutral core pass reconciles active
+# keyed runs from durable facts (publish fact, job status, queue existence):
+# force-succeed published runs, re-send or re-drive deliveries that were lost,
+# terminalize exhausted ones, then hand redeliveries to the overlay lifecycle.
+SCHEDULED_REFRESH_RECONCILE_INTERVAL_SECONDS = 60
 
 
-async def _expire_unclaimed_scheduled_refreshes_safely() -> None:
-    """Settle expired pending scheduled runs without depending on an overlay."""
+async def _reconcile_scheduled_refreshes_safely(*, deliver: bool = True) -> None:
+    """Reconcile keyed scheduled runs without depending on an overlay."""
     from app.core.db import async_session
-    from app.platform.refresh.service import expire_unclaimed_admitted_runs
+    from app.platform.extensions import get_scheduled_refresh_lifecycle
+    from app.platform.refresh.reconcile import reconcile_keyed_refresh_runs
 
     try:
         async with async_session() as session:
-            expired = await expire_unclaimed_admitted_runs(session)
+            result = await reconcile_keyed_refresh_runs(session, deliver=deliver)
             await session.commit()
-        if expired:
+            redeliveries = result.redeliveries
+        if redeliveries and deliver:
+            try:
+                await get_scheduled_refresh_lifecycle().redeliver(redeliveries)
+            except Exception:  # broad: a failed defer is re-sent on the next pass
+                log.exception("scheduled_refresh_redeliver_failed")
+        if result.changed:
             log.warning(
-                "scheduled_refresh_claims_expired",
-                count=len(expired),
-                run_ids=[str(run_id) for run_id in expired],
+                "scheduled_refresh_reconciled",
+                succeeded=result.succeeded,
+                failed=result.failed,
+                cancelled=result.cancelled,
+                redeliveries=len(redeliveries),
             )
     except Exception:  # broad: a recovery sweep must not take down the job worker
-        log.exception("scheduled_refresh_expiry_sweep_failed")
+        log.exception("scheduled_refresh_reconcile_failed")
 
 
 async def _queue_crs_facts_repair_safely() -> None:
@@ -552,11 +562,11 @@ async def _queue_crs_facts_repair_safely() -> None:
         log.warning("crs_facts_repair_queue_failed", exc_info=True)
 
 
-async def run_scheduled_refresh_expiry_sweeps() -> None:
-    """Sweep expired unclaimed scheduled admissions for the worker lifetime."""
+async def run_scheduled_refresh_reconciliation() -> None:
+    """Reconcile keyed scheduled admissions for the worker lifetime."""
     while True:
-        await asyncio.sleep(SCHEDULED_REFRESH_EXPIRY_SWEEP_INTERVAL_SECONDS)
-        await _expire_unclaimed_scheduled_refreshes_safely()
+        await asyncio.sleep(SCHEDULED_REFRESH_RECONCILE_INTERVAL_SECONDS)
+        await _reconcile_scheduled_refreshes_safely()
 
 
 async def run_health_server() -> None:
@@ -686,12 +696,12 @@ async def main() -> None:
             # fix(#1778): early, before the jobs-by-events join this query
             # builds has a large table to sort.
             await _purge_terminal_jobs_safely()
-            await _expire_unclaimed_scheduled_refreshes_safely()
+            await _reconcile_scheduled_refreshes_safely(deliver=False)
             await _queue_crs_facts_repair_safely()
             sweep_task = asyncio.create_task(run_stalled_queue_sweeps())
             purge_task = asyncio.create_task(run_terminal_job_purges())
             scheduled_expiry_task = asyncio.create_task(
-                run_scheduled_refresh_expiry_sweeps()
+                run_scheduled_refresh_reconciliation()
             )
             try:
                 lifecycle = get_scheduled_refresh_lifecycle()

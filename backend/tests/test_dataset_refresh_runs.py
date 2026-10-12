@@ -43,6 +43,7 @@ from app.platform.refresh.service import (
     ABANDONED_ERROR_CODE,
     ABANDONED_RUN_CUTOFF_SECONDS,
     RUN_ORIGIN_KINDS,
+    RUN_PHASES,
     RUN_STATUSES,
     RUN_TRIGGERS,
     TERMINAL_RUN_STATUSES,
@@ -237,7 +238,7 @@ class TestVocabularyMatchesTheConstraints:
             "chk_refresh_runs_scheduled_identity": (
                 "(trigger = 'scheduled' AND scheduled_for IS NOT NULL "
                 "AND occurrence_key IS NOT NULL AND claim_deadline IS NOT NULL "
-                "AND execution_key IS NOT NULL) "
+                "AND execution_key IS NOT NULL AND schedule_version IS NOT NULL) "
                 "OR (trigger <> 'scheduled' AND scheduled_for IS NULL)"
             )
         }
@@ -252,6 +253,9 @@ class TestVocabularyMatchesTheConstraints:
             "scheduled_for",
         )
         assert indexes["uq_refresh_runs_execution_key"] == ("execution_key",)
+
+    def test_phase_values_match(self) -> None:
+        assert self._constraint_values("chk_refresh_runs_phase") == set(RUN_PHASES)
 
     def test_blocked_is_terminal(self) -> None:
         assert "blocked" in RUN_STATUSES
@@ -273,7 +277,7 @@ class TestCreatePendingRunRefusesBadVocabulary:
 
     async def test_scheduled_trigger_requires_immutable_identity(self) -> None:
         with pytest.raises(
-            ValueError, match="immutable occurrence and source identity"
+            ValueError, match="immutable occurrence, source and schedule"
         ):
             await create_pending_run(
                 None,  # type: ignore[arg-type]
@@ -910,6 +914,7 @@ class TestCompareAndSetTransitions:
 
         run_id = run.id
         run.status = "cancelled"
+        run.phase = None
         await test_db_session.commit()
 
         assert (
@@ -938,6 +943,7 @@ class TestCompareAndSetTransitions:
         await test_db_session.commit()
 
         run.status = "cancelled"
+        run.phase = None
         run.error_code = ABANDONED_ERROR_CODE
         await test_db_session.commit()
 
@@ -1079,26 +1085,27 @@ class TestImmutableJobBinding:
     def test_no_write_path_reassigns_ingest_job_id(self) -> None:
         """The binding is set once at dispatch. A retry is a new row, never a
         re-pointed old one, so nothing may name this column in an UPDATE."""
-        source = (
-            Path(__file__).resolve().parents[1] / "app/platform/refresh/service.py"
-        ).read_text(encoding="utf-8")
-        tree = ast.parse(source)
-
+        package = Path(__file__).resolve().parents[1] / "app/platform/refresh"
         offenders: list[str] = []
-        for node in ast.walk(tree):
-            # `.values(...)` on an update(), and the values dicts callers build
-            # and pass through `transition_run`.
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                if node.func.attr == "values":
+        for source_path in package.glob("*.py"):
+            tree = ast.parse(source_path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                # `.values(...)` on an update(), and the values dicts callers
+                # build and pass through `transition_run`.
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                    if node.func.attr == "values":
+                        offenders += [
+                            f"{source_path.name}:{kw.arg}"
+                            for kw in node.keywords
+                            if kw.arg == "ingest_job_id"
+                        ]
+                if isinstance(node, ast.Dict):
                     offenders += [
-                        kw.arg for kw in node.keywords if kw.arg == "ingest_job_id"
+                        f"{source_path.name}:{key.value}"
+                        for key in node.keys
+                        if isinstance(key, ast.Constant)
+                        and key.value == "ingest_job_id"
                     ]
-            if isinstance(node, ast.Dict):
-                offenders += [
-                    key.value
-                    for key in node.keys
-                    if isinstance(key, ast.Constant) and key.value == "ingest_job_id"
-                ]
 
         assert offenders == [], (
             "ingest_job_id appears in an UPDATE's values — the run's job "
@@ -1201,6 +1208,11 @@ async def _stale_run(session, *, job_status: str, age_seconds: int, run_status: 
         feature_count_before=42,
     )
     run.status = run_status
+    run.phase = {
+        "pending": "admitted",
+        "running": "ingesting",
+        "succeeded": "published",
+    }.get(run_status)
     run.started_at = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
     await session.commit()
     return run, job
@@ -1474,6 +1486,7 @@ class TestRefreshRunListEndpoint:
         run.occurrence_key = f"history:{uuid.uuid4()}"
         run.claim_deadline = claim_deadline
         run.execution_key = uuid.uuid4()
+        run.schedule_version = "v1"
         await test_db_session.commit()
 
         resp = await client.get(
@@ -1954,6 +1967,7 @@ class TestHistoryPaging:
             )
             run.started_at = base - timedelta(minutes=offset)
             run.status = "succeeded"
+            run.phase = "published"
             await test_db_session.flush()
         await test_db_session.commit()
 
@@ -1973,6 +1987,46 @@ class TestMigrationBackfill:
     """fix(#1274 review): in-flight legacy reupload jobs get run rows at
     upgrade, or the admission index sees their dataset as idle and admits a
     concurrent refresh against the same tables the old task will still swap."""
+
+    @staticmethod
+    async def _execute_backfill(session) -> None:
+        """Replay 0037's backfill on the current schema.
+
+        The historical INSERT predates the 0082 phase-status check; mirror
+        the upgrade window by dropping it, replaying, mapping the rows'
+        phases the way 0082 does, and restoring the constraint.
+        """
+        from sqlalchemy import text as sa_text
+
+        await session.execute(
+            sa_text(
+                "ALTER TABLE catalog.dataset_refresh_runs "
+                "DROP CONSTRAINT chk_refresh_runs_phase_status"
+            )
+        )
+        await session.execute(sa_text(TestMigrationBackfill._backfill_sql()))
+        await session.execute(
+            sa_text(
+                "UPDATE catalog.dataset_refresh_runs SET phase = 'ingesting' "
+                "WHERE phase IS NULL AND status = 'running'"
+            )
+        )
+        await session.execute(
+            sa_text(
+                "UPDATE catalog.dataset_refresh_runs SET phase = 'admitted' "
+                "WHERE phase IS NULL AND status = 'pending'"
+            )
+        )
+        await session.execute(
+            sa_text(
+                "ALTER TABLE catalog.dataset_refresh_runs "
+                "ADD CONSTRAINT chk_refresh_runs_phase_status "
+                "CHECK ((phase IS NULL AND status IN ('failed', 'cancelled', 'blocked')) "
+                "OR (phase = 'published' AND status = 'succeeded') "
+                "OR (phase IN ('admitted', 'dispatched') AND status = 'pending') "
+                "OR (phase = 'ingesting' AND status = 'running'))"
+            )
+        )
 
     @staticmethod
     def _backfill_sql() -> str:
@@ -1996,14 +2050,12 @@ class TestMigrationBackfill:
     async def test_in_flight_legacy_job_gets_a_running_row(
         self, test_db_session
     ) -> None:
-        from sqlalchemy import text as sa_text
-
         dataset, job = await _seed(test_db_session)
         job.attempt_id = uuid.uuid4()
         job.source_url = "https://svc.test/wfs"
         await test_db_session.commit()
 
-        await test_db_session.execute(sa_text(self._backfill_sql()))
+        await self._execute_backfill(test_db_session)
         await test_db_session.commit()
 
         run = (
@@ -2055,7 +2107,7 @@ class TestMigrationBackfill:
         )
         await test_db_session.commit()
 
-        await test_db_session.execute(sa_text(self._backfill_sql()))
+        await self._execute_backfill(test_db_session)
         await test_db_session.commit()
 
         count = (
@@ -2075,13 +2127,11 @@ class TestMigrationBackfill:
         attempt_id deliberately proves nothing: every job carries one from
         birth (fix #1274 review), so a run invented from it would 409 the
         real commit until the stale sweep."""
-        from sqlalchemy import text as sa_text
-
         _dataset, job = await _seed(test_db_session)
         job.status = "pending"
         await test_db_session.commit()
 
-        await test_db_session.execute(sa_text(self._backfill_sql()))
+        await self._execute_backfill(test_db_session)
         await test_db_session.commit()
 
         count = (

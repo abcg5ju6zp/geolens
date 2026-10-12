@@ -901,6 +901,11 @@ class TestRenewalCoversEveryLeasingDoor:
             feature_count_before=dataset.feature_count,
         )
         run.status = run_status
+        run.phase = {
+            "pending": "admitted",
+            "running": "ingesting",
+            "succeeded": "published",
+        }.get(run_status)
         await self._procrastinate_row(session, job_id=job.id, ref=ref)
         await session.commit()
         return job

@@ -146,6 +146,9 @@ class Failure:
     notify: bool = True
     # Stored in place of the exception's own text.
     reason: str | None = None
+    # A transient failure (source/credential store temporarily unavailable)
+    # re-drives the same keyed run instead of ending it.
+    transient: bool = False
 
 
 class DatasetDeleted(Exception):
@@ -329,14 +332,17 @@ async def _fail(
 class _Attempt:
     """One attempt's ids, and what the seam cleans up after it."""
 
-    job_id: uuid.UUID
-    attempt_id: uuid.UUID
-    dataset_id: uuid.UUID
+    job_id: str
+    attempt_id: str
+    dataset_id: str
     heartbeat: asyncio.Task[None] | None = None
     staging_table: str = ""
     # Set as the publishing commit returns, before anything else can raise or
     # be cancelled, so cleanup never reaps what the commit published.
     publication: PublicationCommit | None = None
+    # A transient failure re-drove the same run under a fresh key; this
+    # delivery returns normally so its queue row is deleted, not failed.
+    redelivered: bool = False
 
 
 async def settle_replacement(
@@ -376,7 +382,9 @@ async def settle_replacement(
         )
         logger.exception("Ingest task failed", job_id=job_id, task=strategy.task)
         await _record_failure(strategy.task, attempt, exc, failure)
-        if failure.refused:
+        if failure.refused or attempt.redelivered:
+            # A refused input or a transient failure that re-drove the run
+            # ends this delivery cleanly; the run itself is not failed.
             return
         raise
     finally:
@@ -660,6 +668,14 @@ async def _record_failure(
                 timeout=heartbeat.JOB_ERROR_WRITE_TIMEOUT_MS / 1000,
             )
             await arm_job_error_write_budget(session)
+            if failure.transient and await _readmit_transient(
+                session, attempt, failure, reason
+            ):
+                # Same run, fresh attempt/key; this delivery commits without
+                # ending the job or mailing a failure. The reconciler sends.
+                attempt.redelivered = True
+                await session.commit()
+                return
             landed = await _fail(
                 session,
                 attempt.job_id,
@@ -684,6 +700,25 @@ async def _record_failure(
                 await run_publish_followups(
                     attempt.job_id, attempt_id=attempt.attempt_id
                 )
+
+
+async def _readmit_transient(
+    session: "AsyncSession",
+    attempt: _Attempt,
+    failure: Failure,
+    reason: str | BaseException,
+) -> bool:
+    """Re-drive a transiently failed attempt's keyed run; False to fail normally."""
+    from app.platform.refresh.reconcile import readmit_running_attempt
+
+    redelivery = await readmit_running_attempt(
+        session,
+        job_id=attempt.job_id,
+        attempt_id=attempt.attempt_id,
+        code=failure.error_code,
+        message=reason,
+    )
+    return redelivery is not None
 
 
 # A keyed refresh whose attempt ran past its execution limit.

@@ -1911,6 +1911,11 @@ class TestCredentialRenewal:
             feature_count_before=dataset.feature_count,
         )
         run.status = run_status
+        run.phase = {
+            "pending": "admitted",
+            "running": "ingesting",
+            "succeeded": "published",
+        }.get(run_status)
         run.started_at = datetime.now(timezone.utc) - timedelta(seconds=run_age_seconds)
         # Procrastinate's insert trigger writes procrastinate_events through
         # unqualified names, so the schema has to be on the search_path for a

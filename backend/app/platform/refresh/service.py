@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -50,6 +51,9 @@ TERMINAL_RUN_STATUSES: tuple[str, ...] = (
     "blocked",
 )
 ACTIVE_RUN_STATUSES: tuple[str, ...] = ("pending", "running")
+# Delivery phase, orthogonal to status. chk_refresh_runs_phase_status pins each
+# value to one status; terminal rows carry NULL.
+RUN_PHASES: tuple[str, ...] = ("admitted", "dispatched", "ingesting", "published")
 RUN_TRIGGERS: tuple[str, ...] = ("manual", "api", "cli", "scheduled")
 RUN_ORIGIN_KINDS: tuple[str, ...] = (
     "upload",
@@ -68,6 +72,13 @@ RUN_ORIGIN_KINDS: tuple[str, ...] = (
 ABANDONED_RUN_CUTOFF_SECONDS = 3600
 SCHEDULED_CLAIM_DEADLINE_SECONDS = 30 * 60
 ADMITTED_EXPIRY_BATCH_SIZE = 100
+# Deliveries one keyed run may receive (first admission plus re-drives)
+# before reconciliation terminalizes it.
+SCHEDULED_MAX_DELIVERIES = 3
+# After this grace a dispatched key with no live queue task is re-sent with
+# the same key; longer than the worker's 60 s reconciliation interval so two
+# passes cannot both resend.
+REDRIVE_DEFER_GRACE_SECONDS = 90
 
 ADMITTED_CLAIM_EXPIRED_ERROR_CODE = "scheduled_claim_expired"
 ADMITTED_CLAIM_EXPIRED_ERROR_MESSAGE = FixedReason(
@@ -337,6 +348,7 @@ async def create_pending_run(
     credential_reference: str | None = None,
     credential_version: str | None = None,
     data_revision_baseline: int | None = None,
+    schedule_version: str | None = None,
 ) -> DatasetRefreshRun:
     """Insert the ``pending`` row in the caller's transaction, before ``defer``.
 
@@ -368,10 +380,11 @@ async def create_pending_run(
         execution_key,
         source_binding_fingerprint,
         verification_policy,
+        schedule_version,
     )
     if trigger == "scheduled" and any(value is None for value in scheduled_identity):
         raise ValueError(
-            "scheduled runs require immutable occurrence and source identity"
+            "scheduled runs require immutable occurrence, source and schedule identity"
         )
     if trigger != "scheduled" and scheduled_for is not None:
         raise ValueError("only scheduled runs may carry scheduled_for")
@@ -451,6 +464,8 @@ async def create_pending_run(
         origin_kind=origin_kind,
         trigger=trigger,
         status="pending",
+        phase="admitted",
+        attempts=1,
         triggered_by=triggered_by,
         started_at=now,
         created_at=now,
@@ -467,6 +482,7 @@ async def create_pending_run(
         verification_policy=verification_policy,
         credential_reference=credential_reference,
         credential_version=credential_version,
+        schedule_version=schedule_version,
     )
     try:
         async with session.begin_nested():
@@ -508,6 +524,16 @@ async def _active_run_id_for_job(
     )
 
 
+# The delivery phase paired with each status, per chk_refresh_runs_phase_status.
+_PHASE_FOR_STATUS: dict[str, str | None] = {
+    "running": "ingesting",
+    "succeeded": "published",
+    "failed": None,
+    "cancelled": None,
+    "blocked": None,
+}
+
+
 async def transition_run(
     session: AsyncSession,
     run_id: uuid.UUID,
@@ -526,17 +552,23 @@ async def transition_run(
     Zero rows updated is not an error or a retry signal: it means another
     actor owns this run now — callers log it and back off.
 
+    The orthogonal delivery phase moves with the status; the
+    admitted/dispatched distinction on pending rows is set directly, never
+    through this transition.
+
     ``expected`` is a tuple because a run can fail BEFORE it is claimed
     (a task that fails before its claim commits), so the failure path accepts
     both `pending` and `running`; it never contains a terminal state.
     """
+    written = {"phase": _PHASE_FOR_STATUS.get(to)}
+    written.update(values or {})
     result = await session.execute(
         update(DatasetRefreshRun)
         .where(
             DatasetRefreshRun.id == run_id,
             DatasetRefreshRun.status.in_(expected),
         )
-        .values(status=to, **(values or {}))
+        .values(status=to, **written)
         .returning(DatasetRefreshRun.id)
     )
     if result.scalar_one_or_none() is not None:
@@ -605,6 +637,35 @@ async def claim_run_for_job(
     return run_id if won else None
 
 
+async def mark_run_dispatched(
+    session: AsyncSession,
+    *,
+    ingest_job_id: uuid.UUID,
+    execution_key: uuid.UUID,
+    now: datetime | None = None,
+) -> bool:
+    """Record that the current key was deferred, phase admitted → dispatched.
+
+    Called by the dispatcher after its ``defer`` succeeds, and by the
+    reconciliation re-send. Idempotent: a repeat for the same key keeps
+    ``dispatched``. A run on a newer key (already re-driven) or one no longer
+    pending is left alone.
+    """
+    stamp = now or datetime.now(timezone.utc)
+    result = await session.execute(
+        update(DatasetRefreshRun)
+        .where(
+            DatasetRefreshRun.ingest_job_id == ingest_job_id,
+            DatasetRefreshRun.execution_key == execution_key,
+            DatasetRefreshRun.status == "pending",
+            DatasetRefreshRun.phase.in_(("admitted", "dispatched")),
+        )
+        .values(phase="dispatched", last_dispatched_at=stamp)
+        .returning(DatasetRefreshRun.id)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def claim_admitted_run_for_job(
     session: AsyncSession,
     ingest_job_id: uuid.UUID,
@@ -625,10 +686,11 @@ async def claim_admitted_run_for_job(
         .where(
             DatasetRefreshRun.ingest_job_id == ingest_job_id,
             DatasetRefreshRun.status == "pending",
+            DatasetRefreshRun.phase.in_(("admitted", "dispatched")),
             DatasetRefreshRun.execution_key == execution_key,
             DatasetRefreshRun.claim_deadline > now,
         )
-        .values(status="running", claimed_at=now)
+        .values(status="running", phase="ingesting", claimed_at=now)
         .returning(DatasetRefreshRun.id)
     )
     return result.scalar_one_or_none()
@@ -644,6 +706,27 @@ async def claim_scheduled_run_for_job(
     return await claim_admitted_run_for_job(
         session, ingest_job_id, execution_key=execution_key
     )
+
+
+async def keyed_run_is_redrivable(
+    session: AsyncSession, ingest_job_id: uuid.UUID
+) -> bool:
+    """Whether this job's active keyed run may receive another delivery.
+
+    The stale-job hook leaves a lost worker's run alone when this is true:
+    the same stale pass's reconciliation re-drives it under a fresh key.
+    """
+    found = await session.scalar(
+        select(DatasetRefreshRun.id)
+        .where(
+            DatasetRefreshRun.ingest_job_id == ingest_job_id,
+            DatasetRefreshRun.status.in_(ACTIVE_RUN_STATUSES),
+            DatasetRefreshRun.execution_key.is_not(None),
+            DatasetRefreshRun.attempts < SCHEDULED_MAX_DELIVERIES,
+        )
+        .limit(1)
+    )
+    return found is not None
 
 
 async def reject_pending_admitted_refresh(
@@ -727,43 +810,17 @@ async def _abort_admitted_refresh(
 
 
 async def expire_unclaimed_admitted_runs(session: AsyncSession) -> list[uuid.UUID]:
-    """Terminalize a bounded batch of keyed work whose claim window elapsed.
+    """Reconcile a bounded batch of keyed work (re-drive, resend or terminalize).
 
-    Each candidate is settled through the job-first lock helper so a worker
-    that claims it while the sweep is running wins without a partial outcome.
+    Thin compatibility wrapper around
+    ``reconcile_keyed_refresh_runs`` for callers without an overlay
+    lifecycle to defer through: re-driven rows wait ``admitted`` until a
+    reconciler that can deliver sends them. Returns every run it touched.
     """
-    now = await session.scalar(text("SELECT CURRENT_TIMESTAMP"))
-    if now is None:
-        raise RuntimeError("database did not return a timestamp for scheduled expiry")
-    candidates = (
-        await session.execute(
-            select(
-                DatasetRefreshRun.ingest_job_id,
-                DatasetRefreshRun.execution_key,
-            )
-            .where(
-                DatasetRefreshRun.status == "pending",
-                DatasetRefreshRun.ingest_job_id.is_not(None),
-                DatasetRefreshRun.execution_key.is_not(None),
-                DatasetRefreshRun.claim_deadline <= now,
-            )
-            .limit(ADMITTED_EXPIRY_BATCH_SIZE)
-        )
-    ).all()
-    expired: list[uuid.UUID] = []
-    for ingest_job_id, execution_key in candidates:
-        if ingest_job_id is None or execution_key is None:
-            continue
-        run_id = await reject_pending_admitted_refresh(
-            session,
-            ingest_job_id=ingest_job_id,
-            execution_key=execution_key,
-            error_code=ADMITTED_CLAIM_EXPIRED_ERROR_CODE,
-            error_message=ADMITTED_CLAIM_EXPIRED_ERROR_MESSAGE,
-        )
-        if run_id is not None:
-            expired.append(run_id)
-    return expired
+    from app.platform.refresh.reconcile import reconcile_keyed_refresh_runs
+
+    result = await reconcile_keyed_refresh_runs(session, deliver=False)
+    return list(result.touched_run_ids)
 
 
 async def expire_unclaimed_scheduled_runs(session: AsyncSession) -> list[uuid.UUID]:
@@ -777,6 +834,7 @@ async def cancel_active_run_for_job(
     *,
     error_message: str = USER_CANCELLED_ERROR_MESSAGE,
     cancelled_by: uuid.UUID | None = None,
+    execution_key: uuid.UUID | None = None,
 ) -> uuid.UUID | None:
     """Finalize this job's active run as ``cancelled`` on a user's request.
 
@@ -785,10 +843,21 @@ async def cancel_active_run_for_job(
     and the worker's finalize fence (``require_ingest_job_update``)
     guarantees no swap lands after that commit.
 
+    When ``execution_key`` is given, only a run still on that delivery is
+    cancelled: a cancel carried by a stale delivery cannot cancel a run the
+    reconciliation re-drove under a newer key. Without it, the job's current
+    active run is cancelled (the manual cancel endpoint's behavior).
+
     Returns the run id when this caller won the CAS, else ``None`` (no run
     row bound to the job, or another actor finalized it first — both normal).
     """
-    run_id = await _active_run_id_for_job(session, ingest_job_id)
+    run_select = select(DatasetRefreshRun.id).where(
+        DatasetRefreshRun.ingest_job_id == ingest_job_id,
+        DatasetRefreshRun.status.in_(ACTIVE_RUN_STATUSES),
+    )
+    if execution_key is not None:
+        run_select = run_select.where(DatasetRefreshRun.execution_key == execution_key)
+    run_id = await session.scalar(run_select)
     if run_id is None:
         return None
     won = await transition_run(
@@ -881,6 +950,19 @@ async def record_refresh_success(
     )
     if not won:
         return None
+    if dataset_version_id is not None:
+        # The durable publish fact, written in this same SAVEPOINT so a
+        # crashed worker leaves a version reconciliation can recognize even
+        # if the commit acknowledgement is later observed as ambiguous.
+        await session.execute(
+            text(
+                "UPDATE catalog.dataset_versions v SET ingest_job_id = :job_id "
+                "WHERE v.id = :version_id AND v.ingest_job_id IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM catalog.dataset_versions o "
+                "WHERE o.ingest_job_id = :job_id AND o.id <> :version_id)"
+            ),
+            {"job_id": ingest_job_id, "version_id": dataset_version_id},
+        )
     await _emit_refresh_succeeded(session, run_id)
     return run_id
 
@@ -1005,6 +1087,11 @@ _RUN_JOB_SCOPE = """
 # 'running')` is the expected-state test, RETURNING gives the rowcount, so
 # the sweep can no more overwrite a terminal status than `transition_run`.
 #
+# Keyed rows (execution_key set) belong to reconcile_keyed_refresh_runs,
+# which re-drives them under a fresh key instead of abandoning them, so
+# `execution_key IS NULL` scopes this proof to the legacy/manual rows it
+# exists for.
+#
 # The dataset EXISTS clause looks redundant against a NOT NULL FK, and is
 # not: `dataset_refresh_runs` carries no RLS policy of its own (dormant
 # `tenant_id`, like `datasets`), so with RLS ENABLED this UPDATE would see
@@ -1041,10 +1128,12 @@ _ABANDONED_RUN_SQL = text(
     """
     UPDATE catalog.dataset_refresh_runs AS r
     SET status = 'cancelled',
+        phase = NULL,
         finished_at = :now,
         error_code = :error_code,
         error_message = :error_message
     WHERE r.status IN ('pending', 'running')
+      AND r.execution_key IS NULL
       AND r.started_at < :cutoff
       AND EXISTS (
           SELECT 1 FROM catalog.datasets d WHERE d.id = r.dataset_id
@@ -1076,13 +1165,30 @@ _ABANDONED_RUN_SQL = text(
 # workers, which mark the job complete without calling the new finalizer.
 # A complete job IS proof the swap committed, so the honest terminal state
 # is `succeeded`. No cutoff: the job's terminal status is proof enough.
+#
+# Keyed (post-0064) rows are reconciled by reconcile_keyed_refresh_runs,
+# which can also re-drive; this statement is scoped to the non-keyed legacy
+# rows it exists for. The version join fills the publish link those old
+# finalizers never wrote, using dataset_versions.ingest_job_id as the fact.
 _LEGACY_COMPLETED_RUN_SQL = text(
     """
     UPDATE catalog.dataset_refresh_runs AS r
     SET status = 'succeeded',
-        finished_at = COALESCE(j.completed_at, :now)
+        phase = 'published',
+        finished_at = COALESCE(j.completed_at, :now),
+        dataset_version_id = COALESCE(
+            r.dataset_version_id,
+            (
+                SELECT v.id
+                FROM catalog.dataset_versions v
+                WHERE v.ingest_job_id = j.id AND v.dataset_id = r.dataset_id
+                ORDER BY v.version_number DESC
+                LIMIT 1
+            )
+        )
     FROM catalog.ingest_jobs j
     WHERE j.id = r.ingest_job_id
+      AND r.execution_key IS NULL
       AND r.status IN ('pending', 'running')
       AND j.status = 'complete'
 """
@@ -1172,3 +1278,80 @@ async def list_runs_for_dataset(
         .limit(limit)
     )
     return list(result.scalars()), int(total or 0)
+
+
+@dataclass(frozen=True, slots=True)
+class RunOccurrenceIdentity:
+    """The durable identity of one run, for schedulers and reconciliation."""
+
+    run_id: uuid.UUID
+    dataset_id: uuid.UUID
+    ingest_job_id: uuid.UUID | None
+    trigger: str
+    status: str
+    phase: str | None
+    attempts: int
+    execution_key: uuid.UUID | None
+    scheduled_for: datetime | None
+    occurrence_key: str | None
+    schedule_version: str | None
+
+
+def _identity_from_row(row: Any) -> RunOccurrenceIdentity:
+    return RunOccurrenceIdentity(
+        run_id=row.id,
+        dataset_id=row.dataset_id,
+        ingest_job_id=row.ingest_job_id,
+        trigger=row.trigger,
+        status=row.status,
+        phase=row.phase,
+        attempts=row.attempts,
+        execution_key=row.execution_key,
+        scheduled_for=row.scheduled_for,
+        occurrence_key=row.occurrence_key,
+        schedule_version=row.schedule_version,
+    )
+
+
+async def get_run_by_execution_key(
+    session: AsyncSession, *, execution_key: uuid.UUID
+) -> RunOccurrenceIdentity | None:
+    """Return the run currently carrying ``execution_key``, if any."""
+    row = await session.scalar(
+        select(DatasetRefreshRun).where(
+            DatasetRefreshRun.execution_key == execution_key
+        )
+    )
+    return _identity_from_row(row) if row is not None else None
+
+
+async def get_scheduled_occurrence(
+    session: AsyncSession,
+    *,
+    dataset_id: uuid.UUID,
+    scheduled_for: datetime | None = None,
+    occurrence_key: str | None = None,
+) -> RunOccurrenceIdentity | None:
+    """Return the newest run of one scheduled occurrence, by time or key.
+
+    Lets an overlay scheduler tick answer "did this occurrence already
+    happen?" before admitting, without inserting and catching a unique
+    violation. Matches on ``scheduled_for`` when given, else ``occurrence_key``.
+    """
+    if scheduled_for is None and not occurrence_key:
+        raise ValueError("scheduled_for or occurrence_key is required")
+    statement = (
+        select(DatasetRefreshRun)
+        .where(
+            DatasetRefreshRun.dataset_id == dataset_id,
+            DatasetRefreshRun.trigger == "scheduled",
+        )
+        .order_by(DatasetRefreshRun.started_at.desc(), DatasetRefreshRun.id.desc())
+        .limit(1)
+    )
+    if scheduled_for is not None:
+        statement = statement.where(DatasetRefreshRun.scheduled_for == scheduled_for)
+    if occurrence_key:
+        statement = statement.where(DatasetRefreshRun.occurrence_key == occurrence_key)
+    row = await session.scalar(statement)
+    return _identity_from_row(row) if row is not None else None

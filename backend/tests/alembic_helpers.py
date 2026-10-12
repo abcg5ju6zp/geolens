@@ -37,6 +37,10 @@ This module is the one place that knows about refuse-to-coerce downgrades:
 - ``0077_dataset_previous_version``: refuses while any refresh run has
   ``origin_kind = 'restore'``. Normalized automatically, since ordinary
   restore tests leave such runs behind.
+- ``0082_refresh_run_phase_redrive``: refuses while any keyed
+  (``execution_key`` set) run is still active, since its downgrade drops the
+  redrive identity. Normalized automatically; those rows are keyed-refresh
+  test fixtures, never fixture state another migration test reads.
 
 If a future migration gains a refuse-to-coerce downgrade, teach this module
 about it rather than adding cleanup to individual test files.
@@ -169,6 +173,25 @@ END
 $$;
 """
 
+# Active keyed runs carry 0082's phase/redrive identity, whose downgrade
+# refuses to strand them. They are keyed-refresh test fixtures only.
+_KEYED_RUN_NORMALIZATION = """
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'catalog'
+          AND table_name = 'dataset_refresh_runs'
+          AND column_name = 'execution_key'
+    ) THEN
+        DELETE FROM catalog.dataset_refresh_runs
+        WHERE execution_key IS NOT NULL
+          AND status IN ('pending', 'running');
+    END IF;
+END
+$$;
+"""
+
 
 def _execute_normalization(sql: str) -> None:
     from app.core.config import settings
@@ -196,6 +219,11 @@ def normalize_api_key_state() -> None:
 def normalize_restore_runs() -> None:
     """Delete restore refresh runs so downgrades can cross 0077."""
     _execute_normalization(_RESTORE_RUN_NORMALIZATION)
+
+
+def normalize_keyed_refresh_runs() -> None:
+    """Delete active keyed refresh runs so downgrades can cross 0082."""
+    _execute_normalization(_KEYED_RUN_NORMALIZATION)
 
 
 def run_alembic(
@@ -226,6 +254,7 @@ def run_alembic(
         normalize_seam_extents()
         normalize_api_key_state()
         normalize_restore_runs()
+        normalize_keyed_refresh_runs()
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(_BACKEND_DIR)

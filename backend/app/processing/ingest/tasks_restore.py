@@ -98,6 +98,7 @@ class _RestorePreviousVersion:
         self.user_id = user_id
 
     def prepare(self, job, dataset, staging_table: str) -> None:
+        self.job_id = job.id
         self.expected = (job.user_metadata or {}).get(EXPECTED_PREVIOUS_VERSION_KEY)
         self.previous = previous_version_table(dataset.table_name, dataset.id)
         # The live table waits under this name inside the publishing
@@ -161,7 +162,11 @@ class _RestorePreviousVersion:
     async def write(self, session, dataset) -> Published:
         from app.platform.audit import AuditEvent, audit_emit
         from app.platform.extensions import get_processing_port
+        from app.platform.refresh.publication_fence import (
+            enforce_publication_fence,
+        )
 
+        await enforce_publication_fence(session, job_id=self.job_id, dataset=dataset)
         DatasetVersion = get_processing_port().get_dataset_version_orm_class()
         actor_id = uuid.UUID(self.user_id)
         await session.refresh(

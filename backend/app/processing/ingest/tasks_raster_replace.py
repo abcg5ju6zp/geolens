@@ -413,8 +413,12 @@ class _RasterReplace:
     async def write(self, session, dataset) -> Published:
         from app.modules.audit.service import AuditEvent, audit_emit
         from app.platform.extensions import get_processing_port
+        from app.platform.refresh.publication_fence import (
+            enforce_publication_fence,
+        )
         from app.processing.raster.models import RasterAsset
 
+        await enforce_publication_fence(session, job_id=self.job_uuid, dataset=dataset)
         raster_asset = (
             await session.execute(
                 select(RasterAsset).where(RasterAsset.dataset_id == dataset.id)

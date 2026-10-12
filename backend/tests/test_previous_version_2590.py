@@ -475,8 +475,8 @@ async def test_dropping_the_previous_version(
         assert await _relation_exists(session, previous)
         await session.execute(
             text(
-                "UPDATE catalog.dataset_refresh_runs SET status = 'cancelled' "
-                "WHERE ingest_job_id = :id"
+                "UPDATE catalog.dataset_refresh_runs SET status = 'cancelled', "
+                "phase = NULL WHERE ingest_job_id = :id"
             ),
             {"id": job.id},
         )
@@ -670,8 +670,8 @@ async def test_a_scheduled_admission_waiting_on_a_restore_sees_its_hold(
     )
     await session.execute(
         text(
-            "UPDATE catalog.dataset_refresh_runs SET status = 'running' "
-            "WHERE ingest_job_id = :id"
+            "UPDATE catalog.dataset_refresh_runs SET status = 'running', "
+            "phase = 'ingesting' WHERE ingest_job_id = :id"
         ),
         {"id": restore_job.id},
     )
@@ -698,7 +698,8 @@ async def test_a_scheduled_admission_waiting_on_a_restore_sees_its_hold(
         await publication.execute(
             text(
                 "UPDATE catalog.dataset_refresh_runs SET status = 'succeeded', "
-                "finished_at = now() WHERE ingest_job_id = :id"
+                "phase = 'published', finished_at = now() "
+                "WHERE ingest_job_id = :id"
             ),
             {"id": restore_job.id},
         )
@@ -713,6 +714,7 @@ async def test_a_scheduled_admission_waiting_on_a_restore_sees_its_hold(
                         source_binding_fingerprint="fp",
                         local_edit_baseline=None,
                         origin_kind="service",
+                        schedule_version="v1",
                     ),
                     trigger="scheduled",
                     scheduled_for=datetime.now(timezone.utc),

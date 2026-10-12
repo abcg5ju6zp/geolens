@@ -71,6 +71,7 @@ async def _scheduled_run(session) -> tuple[DatasetRefreshRun, IngestJob]:
         execution_key=uuid.uuid4(),
         source_binding_fingerprint="a" * 64,
         verification_policy="arcgis_id_set_v1",
+        schedule_version="v1",
     )
     await session.commit()
     return run, job
@@ -97,36 +98,45 @@ async def test_scheduled_claim_is_exactly_once(test_db_session) -> None:
     assert persisted.status == "running"
 
 
-async def test_expired_unclaimed_scheduled_run_releases_active_reservation(
+async def test_expired_unclaimed_scheduled_run_is_redriven_under_a_new_key(
     test_db_session,
 ) -> None:
     run, job = await _scheduled_run(test_db_session)
     assert run.execution_key is not None
+    old_key, old_attempt = run.execution_key, job.attempt_id
     job_id = job.id
     run.claim_deadline = datetime.now(timezone.utc) - timedelta(seconds=1)
     await test_db_session.commit()
 
-    expired = await expire_unclaimed_admitted_runs(test_db_session)
+    touched = await expire_unclaimed_admitted_runs(test_db_session)
     await test_db_session.commit()
 
     run_id = run.id
-    assert expired == [run_id]
+    assert touched == [run_id]
     test_db_session.expire_all()
     persisted = await test_db_session.get(DatasetRefreshRun, run_id)
     assert persisted is not None
-    assert persisted.status == "failed"
-    assert persisted.error_code == "scheduled_claim_expired"
+    assert persisted.status == "pending"
+    assert persisted.phase == "admitted"
+    assert persisted.attempts == 2
+    assert persisted.execution_key != old_key
+    assert persisted.last_attempt_error_code == "scheduled_claim_expired"
+    assert persisted.claim_deadline > datetime.now(timezone.utc)
     persisted_job = await test_db_session.get(IngestJob, job_id)
     assert persisted_job is not None
-    assert persisted_job.status == "failed"
-    assert persisted_job.error_code == "scheduled_claim_expired"
-    assert persisted_job.completed_at is not None
+    assert persisted_job.status == "pending"
+    assert persisted_job.attempt_id != old_attempt
 
+    # The stale delivery can no longer claim; the new key can.
+    assert (
+        await claim_admitted_run_for_job(test_db_session, job_id, execution_key=old_key)
+        is None
+    )
     assert (
         await claim_admitted_run_for_job(
-            test_db_session, job_id, execution_key=run.execution_key
+            test_db_session, job_id, execution_key=persisted.execution_key
         )
-        is None
+        == run_id
     )
 
 
@@ -325,25 +335,43 @@ async def test_a_timeout_whose_failure_write_loses_its_acknowledgement_mails_onc
     assert _events(notifications) == ["ingest_failed"]
 
 
-async def test_worker_expiry_sweep_commits_expired_ids() -> None:
-    from app.platform.jobs.worker import _expire_unclaimed_scheduled_refreshes_safely
+async def test_worker_reconciliation_sweep_commits_and_redelivers() -> None:
+    from app.platform.jobs.worker import _reconcile_scheduled_refreshes_safely
+    from app.platform.refresh.reconcile import (
+        Redelivery,
+        ReconcileResult,
+    )
 
     run_id = uuid.uuid4()
     session = AsyncMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
+    redelivery = Redelivery(
+        run_id=run_id,
+        job_id=uuid.uuid4(),
+        execution_key=str(uuid.uuid4()),
+        tenant_id=None,
+        attempts=2,
+    )
+    lifecycle = Mock()
+    lifecycle.redeliver = AsyncMock()
 
     with (
         patch("app.core.db.async_session", return_value=session),
         patch(
-            "app.platform.refresh.service.expire_unclaimed_admitted_runs",
-            new=AsyncMock(return_value=[run_id]),
-        ) as expire,
+            "app.platform.refresh.reconcile.reconcile_keyed_refresh_runs",
+            new=AsyncMock(return_value=ReconcileResult(redeliveries=(redelivery,))),
+        ) as reconcile,
+        patch(
+            "app.platform.extensions.get_scheduled_refresh_lifecycle",
+            return_value=lifecycle,
+        ),
     ):
-        await _expire_unclaimed_scheduled_refreshes_safely()
+        await _reconcile_scheduled_refreshes_safely()
 
-    expire.assert_awaited_once_with(session)
+    reconcile.assert_awaited_once_with(session, deliver=True)
     session.commit.assert_awaited_once()
+    lifecycle.redeliver.assert_awaited_once_with((redelivery,))
 
 
 async def test_manual_keyed_admission_claims_once_and_expires(test_db_session) -> None:

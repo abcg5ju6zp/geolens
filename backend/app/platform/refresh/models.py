@@ -22,6 +22,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     func,
@@ -47,9 +48,27 @@ class DatasetRefreshRun(Base):
         CheckConstraint(
             "(trigger = 'scheduled' AND scheduled_for IS NOT NULL "
             "AND occurrence_key IS NOT NULL AND claim_deadline IS NOT NULL "
-            "AND execution_key IS NOT NULL) "
+            "AND execution_key IS NOT NULL AND schedule_version IS NOT NULL) "
             "OR (trigger <> 'scheduled' AND scheduled_for IS NULL)",
             name="chk_refresh_runs_scheduled_identity",
+        ),
+        # Delivery phase, orthogonal to the terminal-status vocabulary:
+        # admitted (row reserved, not yet deferred), dispatched (queued),
+        # ingesting (claimed), published (its data settled). Terminal rows
+        # carry NULL. The paired CHECK below pins every phase to one status,
+        # so the two writers (worker and reconciliation) cannot disagree.
+        CheckConstraint(
+            "phase IS NULL OR phase IN "
+            "('admitted', 'dispatched', 'ingesting', 'published')",
+            name="chk_refresh_runs_phase",
+        ),
+        CheckConstraint("attempts >= 1", name="chk_refresh_runs_attempts"),
+        CheckConstraint(
+            "(phase IS NULL AND status IN ('failed', 'cancelled', 'blocked')) "
+            "OR (phase = 'published' AND status = 'succeeded') "
+            "OR (phase IN ('admitted', 'dispatched') AND status = 'pending') "
+            "OR (phase = 'ingesting' AND status = 'running')",
+            name="chk_refresh_runs_phase_status",
         ),
         # fix(#1325): origin_kind is the run's execution DOOR, written once
         # by create_pending_run at commit time and never updated afterward.
@@ -92,6 +111,14 @@ class DatasetRefreshRun(Base):
             "execution_key",
             unique=True,
             postgresql_where=text("execution_key IS NOT NULL"),
+        ),
+        # Reconciliation scans active keyed runs in claim-deadline order.
+        Index(
+            "ix_refresh_runs_reconcile",
+            "claim_deadline",
+            postgresql_where=text(
+                "execution_key IS NOT NULL AND status IN ('pending', 'running')"
+            ),
         ),
         # The history query: newest-first for one dataset.
         Index("ix_dataset_refresh_runs_dataset_started", "dataset_id", "started_at"),
@@ -166,6 +193,26 @@ class DatasetRefreshRun(Base):
     verification_policy: Mapped[str | None] = mapped_column(String(64), nullable=True)
     credential_reference: Mapped[str | None] = mapped_column(String(256), nullable=True)
     credential_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # The overlay-opaque revision of the schedule configuration this run was
+    # admitted under; core only compares it for equality.
+    schedule_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Delivery phase, orthogonal to ``status`` per chk_refresh_runs_phase_status.
+    phase: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # How many deliveries (the first admission plus re-drives) this run had.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    # Stamp of the latest deferral carrying the current execution_key.
+    last_dispatched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # The most recent failed delivery attempt, kept across re-drives while the
+    # terminal error columns below hold only the final outcome.
+    last_attempt_error_code: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    last_attempt_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     triggered_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("catalog.users.id", ondelete="SET NULL"), nullable=True

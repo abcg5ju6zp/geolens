@@ -122,11 +122,15 @@ class TestExtensionApiVersionConstant:
         v16 adds the required ``restore_previous_version_task`` method to
         ``CatalogPort``, which the previous-version restore route defers.
 
+        v17 adds the required ``redeliver`` method to
+        ScheduledRefreshLifecycle, called with same-run re-deliveries by the
+        keyed-refresh reconciler.
+
         Update this pin, and the note above it, whenever the constant moves.
         """
         from app.platform.extensions.version import EXTENSION_API_VERSION
 
-        assert EXTENSION_API_VERSION == 16
+        assert EXTENSION_API_VERSION == 17
 
 
 class TestCheckExtensionApiVersion:

@@ -1500,8 +1500,8 @@ def _mock_db_for_fail_stale(
     this states the same execute() ordering with the rows filled in. Ordering,
     top to bottom: unbound pending UPDATE, bound pending UPDATE, running
     UPDATE, childless fan-out UPDATE, VRT generation UPDATE, two RasterAsset
-    UPDATEs, two refresh-run UPDATEs, the retention purge DELETE, and the
-    post-expiry presigned SELECT.
+    UPDATEs, two legacy refresh-run UPDATEs, the 0082 keyed-run reconcile
+    SELECT, the retention purge DELETE, and the post-expiry presigned SELECT.
     """
     results = []
 
@@ -1529,6 +1529,14 @@ def _mock_db_for_fail_stale(
         result = MagicMock()
         result.scalars.return_value = []
         results.append(result)
+
+    # 0082: the same stale pass reconciles active KEYED refresh runs from
+    # durable facts. Its candidate scan is a FOR UPDATE SELECT whose `.all()`
+    # is empty in these fixtures; the contract is covered by
+    # test_scheduled_refresh_reconcile.py.
+    keyed = MagicMock()
+    keyed.all.return_value = []
+    results.append(keyed)
 
     purge = MagicMock()
     purge.all.return_value = []

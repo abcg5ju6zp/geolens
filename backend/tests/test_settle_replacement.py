@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import uuid
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -584,6 +585,70 @@ async def test_a_failure_before_the_commit_leaves_live_data_as_it_was(
     assert state["staging_left"] == 0
     assert fake.released == (None, True)
     assert _events(notifications) == ["ingest_failed"]
+    assert not await _owes_followups(seed)
+
+
+async def test_a_transient_source_failure_redrives_the_same_keyed_run(
+    seed, notifications
+) -> None:
+    """0082: a transient failure re-drives the same run/job under fresh keys.
+
+    The delivery returns cleanly so its queue row is deleted; the job waits
+    pending under a new attempt and the run waits admitted under a new
+    execution key for the reconciler to send, without a failure event.
+    """
+    old_key = uuid.uuid4()
+    async with db_module.async_session() as session:
+        # The fixture seeds a non-keyed manual run; terminalize it so the
+        # one-active index admits the scheduled run under test.
+        await session.execute(
+            update(DatasetRefreshRun)
+            .where(DatasetRefreshRun.ingest_job_id == seed.job_id)
+            .values(
+                status="cancelled",
+                phase=None,
+                finished_at=datetime.now(timezone.utc),
+            )
+        )
+        keyed = await create_pending_run(
+            session,
+            dataset_id=seed.dataset_id,
+            origin_kind="service",
+            trigger="scheduled",
+            triggered_by=None,
+            ingest_job_id=seed.job_id,
+            feature_count_before=1,
+            scheduled_for=datetime.now(timezone.utc) + timedelta(hours=1),
+            occurrence_key=f"scheduled:{uuid.uuid4()}",
+            execution_key=old_key,
+            source_binding_fingerprint="b" * 64,
+            verification_policy="arcgis_id_set_v1",
+            schedule_version="v1",
+        )
+        await session.commit()
+        run_id = keyed.id
+
+    failure = Failure("source_unavailable", transient=True)
+    # Returns instead of raising: the stale delivery ends successfully, and
+    # nothing is mailed for an attempt that still has deliveries left.
+    await _settle(_Fake(seed, fail_at="fetch", failure=failure))
+
+    async with db_module.async_session() as session:
+        job = await session.get(IngestJob, seed.job_id)
+        run = await session.get(DatasetRefreshRun, run_id)
+        assert job.status == "pending"
+        assert job.attempt_id != seed.attempt_id
+        assert job.dataset_id == seed.dataset_id
+        assert (run.status, run.phase) == ("pending", "admitted")
+        assert run.execution_key != old_key
+        assert run.attempts == 2
+        assert run.last_attempt_error_code == "source_unavailable"
+        assert run.error_code is None
+
+    state = await _state(seed)
+    assert state["catalog"] == (1, "Test Dataset", 1)
+    assert state["live"] == "before"
+    assert _events(notifications) == []
     assert not await _owes_followups(seed)
 
 

@@ -140,7 +140,13 @@ logger = logging.getLogger(__name__)
 # 15 -> 16: CatalogPort gained the required ``restore_previous_version_task``
 # method, which the previous-version restore route defers. An overlay
 # replacing the ``catalog_port`` slot without it fails every restore request.
-EXTENSION_API_VERSION: int = 16
+#
+# 16 -> 17: ScheduledRefreshLifecycle gained the required ``redeliver``
+# method. The worker's keyed-refresh reconciler hands same-run re-deliveries
+# to the overlay for deferral; an overlay owning the
+# ``scheduled_refresh_lifecycle`` slot without it raises AttributeError on the
+# first reconciled re-drive.
+EXTENSION_API_VERSION: int = 17
 
 
 def check_extension_api_version(name: str, declared_version: int | None) -> None:

@@ -93,6 +93,9 @@ class JobEnd:
     at: datetime
     actor: uuid.UUID | None
     ip_address: str | None
+    # A keyed refresh cancel names the delivery it targets; None cancels the
+    # job's current run (the manual cancel endpoint's behavior).
+    run_execution_key: uuid.UUID | None = None
 
 
 JobEndHook = Callable[[AsyncSession, JobEnd], Awaitable[uuid.UUID | None]]
@@ -483,17 +486,26 @@ async def abort(
     return ended.outcome
 
 
-async def cancel(session: AsyncSession, job: IngestJob, *, actor: uuid.UUID) -> Ended:
+async def cancel(
+    session: AsyncSession,
+    job: IngestJob,
+    *,
+    actor: uuid.UUID,
+    run_execution_key: uuid.UUID | None = None,
+) -> Ended:
     """End a pending or running job at ``actor``'s request, fenced on its attempt.
 
     Needs no proof that the work stopped. A worker's finalize fences on the
     same row, so once the cancel commits, a late swap matches nothing and
     rolls back. ``Ended.linked["run"]`` is the refresh run the cancel ended.
 
-    Sets a 2 s ``lock_timeout`` for the rest of the caller's transaction, so
-    when a finalize holds the row this raises the lock-timeout error, having
-    written nothing, instead of waiting out the swap. Reads the instance and
-    shares a SAVEPOINT with its hooks as ``abort`` does. Does not commit.
+    When ``run_execution_key`` is given, the run is cancelled only while it
+    still carries that delivery's key, so a stale cancel cannot end a run
+    reconciliation re-drove. Sets a 2 s ``lock_timeout`` for the rest of the
+    caller's transaction, so when a finalize holds the row this raises the
+    lock-timeout error, having written nothing, instead of waiting out the
+    swap. Reads the instance and shares a SAVEPOINT with its hooks as
+    ``abort`` does. Does not commit.
     """
     from app.platform.refresh.service import USER_CANCELLED_ERROR_CODE
 
@@ -510,6 +522,7 @@ async def cancel(session: AsyncSession, job: IngestJob, *, actor: uuid.UUID) -> 
         actor=actor,
         ip_address=None,
         mirror=job,
+        run_execution_key=run_execution_key,
     )
 
 
@@ -582,6 +595,7 @@ async def _end(
     recheck: Sequence[Any] = (),
     values: Mapping[str, Any] | None = None,
     mirror: IngestJob | None = None,
+    run_execution_key: uuid.UUID | None = None,
 ) -> Ended:
     """Write one fenced end and, when it lands, run every owner's hook on it.
 
@@ -632,6 +646,7 @@ async def _end(
                 at=now,
                 actor=actor,
                 ip_address=ip_address,
+                run_execution_key=run_execution_key,
             )
             for name, owner in _OWNERS.items():
                 row_id = await owner.job_ended(session, end)
@@ -700,6 +715,47 @@ async def retry(session: AsyncSession, job: IngestJob) -> Outcome:
         return await _missed(session, job_id, attempt_id)
     _mirror(job, retried._mapping)
     return Outcome.LANDED
+
+
+async def readmit(
+    session: AsyncSession,
+    job: IngestJob,
+    *,
+    linked: Linked | None = None,
+    expect: tuple[str, ...] = ("failed", "pending"),
+) -> bool:
+    """Return a failed or pending job to pending under a new attempt, keeping its data.
+
+    Unlike ``retry`` (which clears ``dataset_id`` for unrelated reuploads),
+    this re-drives the SAME refresh run: the dataset binding is kept, a new
+    ``attempt_id`` fences every late delivery of the old attempt, and
+    ``staged_at`` restarts the stale-pending age so the hour-old failure
+    cannot look stale the instant this lands. ``linked`` resets the run row
+    in the same SAVEPOINT; it raises to roll the job write back when the run
+    is no longer re-drivable. Does not commit.
+    """
+    readmitted_at = datetime.now(timezone.utc)
+    written = {
+        "status": "pending",
+        "attempt_id": uuid.uuid4(),
+        "error_message": None,
+        "error_code": None,
+        "started_at": None,
+        "heartbeat_at": None,
+        "completed_at": None,
+        "user_metadata": func.coalesce(IngestJob.user_metadata, text("'{}'::jsonb")).op(
+            "||", return_type=JSONB
+        )(func.jsonb_build_object("staged_at", readmitted_at.isoformat())),
+    }
+    return await _move(
+        session,
+        job.id,
+        job.attempt_id,
+        expect=expect,
+        written=written,
+        linked=linked,
+        mirror=job,
+    )
 
 
 async def _missed(
@@ -801,6 +857,7 @@ async def release_vrt_regeneration(
 async def _end_refresh_run(session: AsyncSession, end: JobEnd) -> uuid.UUID | None:
     from app.platform.refresh.service import (
         cancel_active_run_for_job,
+        keyed_run_is_redrivable,
         record_refresh_failure,
     )
 
@@ -810,8 +867,18 @@ async def _end_refresh_run(session: AsyncSession, end: JobEnd) -> uuid.UUID | No
         return None
     if end.transition == "cancel":
         return await cancel_active_run_for_job(
-            session, end.job_id, cancelled_by=end.actor
+            session,
+            end.job_id,
+            cancelled_by=end.actor,
+            execution_key=end.run_execution_key,
         )
+    if end.transition == "settle_stale" and await keyed_run_is_redrivable(
+        session, end.job_id
+    ):
+        # A keyed run with deliveries left is re-driven by the refresh
+        # reconciliation that runs later in this same stale pass, keeping its
+        # run_id/occurrence instead of failing the scheduled occurrence.
+        return None
     return await record_refresh_failure(
         session,
         ingest_job_id=end.job_id,
@@ -853,9 +920,18 @@ async def _release_vrt_generation(
 async def _cancel_abandoned_runs(
     session: AsyncSession, now: datetime, job_ids: Sequence[uuid.UUID] | None
 ) -> StalePassResult:
+    from app.platform.refresh.reconcile import reconcile_keyed_refresh_runs
     from app.platform.refresh.service import sweep_abandoned_refresh_runs
 
     cancelled = await sweep_abandoned_refresh_runs(session, now, job_ids=job_ids)
+    # Keyed runs are reconciled in this same pass, after the worker_lost ends
+    # above skipped the re-drivable ones. deliver=False: the startup recovery
+    # cannot defer (the lifecycle is not started yet), so re-driven rows wait
+    # admitted for the worker interval's reconciler to send.
+    reconciled = await reconcile_keyed_refresh_runs(
+        session, now=now, job_ids=job_ids, deliver=False
+    )
+    cancelled += reconciled.succeeded + reconciled.failed + reconciled.cancelled
     return StalePassResult(refresh_runs_cancelled=cancelled)
 
 

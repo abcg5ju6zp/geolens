@@ -7,6 +7,33 @@ and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- `EXTENSION_API_VERSION` is 17. An overlay owning the
+  `scheduled_refresh_lifecycle` slot must implement the new required
+  `redeliver(entries)` method; the worker hands it same-run refresh
+  re-deliveries to enqueue after reconciliation. The community default
+  implementation is a no-op.
+
+### Fixed
+
+- A scheduled refresh that lost its dispatch response, whose source was
+  temporarily unavailable, or whose worker died after publishing a new
+  version but before recording the run result is now continued as the SAME
+  run instead of being dispatched again. Each keyed run permanently binds
+  its dataset, source configuration fingerprint and schedule version, and
+  tracks an `admitted` → `dispatched` → `ingesting` → `published` phase
+  against one ingest job and one data version. A reconciliation pass settles
+  each active run from durable facts — the published dataset version, the
+  job's terminal state and live queue rows — re-sending or re-driving at most
+  three deliveries per run with a rotated execution key and attempt id, and
+  terminalizing with the stored reason when deliveries are exhausted, after
+  which the next scheduled occurrence is computed normally. Cancelling or
+  disabling a schedule, editing the source, or a concurrent manual refresh
+  keeps an old run from publishing against the new configuration or
+  cancelling a newer run. No-change refreshes, ordinary refreshes and manual
+  imports keep their previous behavior. (#2941)
+
 ## [1.24.0] - 2026-10-11
 
 ### Added

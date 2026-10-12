@@ -175,6 +175,14 @@ def _make_mock_db_for_fail_stale(
         mock_result.scalars.return_value = returned_ids
         results.append(mock_result)
 
+    # 0082: the same stale pass reconciles active KEYED refresh runs from
+    # durable facts. Its candidate scan is a FOR UPDATE SELECT whose
+    # `.all()` is empty in these fixtures; the statement contract is covered
+    # by test_scheduled_refresh_reconcile.py.
+    keyed_result = MagicMock()
+    keyed_result.all.return_value = []
+    results.append(keyed_result)
+
     normalized_candidates = [
         row if len(row) == 3 else (uuid.uuid4(), row[0], None)
         for row in (purge_candidates or [])
@@ -388,22 +396,24 @@ async def test_fail_stale_jobs_purges_terminal_jobs_past_retention():
 
     # 5 sweeps (the pending clause is two statements since fix(#1234)) + the
     # VRT asset UPDATE split into two (ready / degraded, fix(#1322 review
-    # round 3)) + the refresh-run sweep's TWO statements (feat(#1219),
-    # fix(#1274 review): legacy-completion recorder then abandonment cancel)
-    # + the purge DELETE + the artifact-carrying SELECT + the post-expiry
-    # staging SELECT.
+    # round 3)) + the refresh-run sweep's TWO legacy statements
+    # (feat(#1219), fix(#1274 review): legacy-completion recorder then
+    # abandonment cancel) + the keyed-run reconciliation scan (0082) + the
+    # purge DELETE + the artifact-carrying SELECT + the post-expiry staging
+    # SELECT.
     # fix(#1709 review r7): +1 — the childless-`fanned_out` reconciliation.
     # fix(#1778 codex r10): the purge no longer reads exempted rows itself —
     # that SELECT moved out of the retention block into the unconditional
     # artifact-carrying query below, which is what keeps the total the same
     # even though the purge DELETE shifts one slot earlier.
-    assert mock_db.execute.await_count == 12
-    # Indexes 7-8 are the refresh-run sweep now; the purge DELETE sits at 9
-    # (no survivors SELECT here, since the one purge candidate has no file
-    # path) and the artifact-carrying SELECT at 10.
+    assert mock_db.execute.await_count == 13
+    # Indexes 7-8 are the legacy refresh-run sweep, index 9 is the keyed
+    # reconciliation scan; the purge DELETE sits at 10 (no survivors SELECT
+    # here, since the one purge candidate has no file path) and the
+    # artifact-carrying SELECT at 11.
     # fix(#1709 review r7): +1 — the childless-`fanned_out` reconciliation
     # sits at index 3, between the running-jobs sweep and the VRT sweep.
-    purge_stmt = mock_db.execute.await_args_list[9].args[0]
+    purge_stmt = mock_db.execute.await_args_list[10].args[0]
     assert isinstance(purge_stmt, Delete)
     where_sql = str(purge_stmt.compile(compile_kwargs={"literal_binds": True}))
     assert "'pending'" in where_sql and "'running'" in where_sql, (
@@ -565,15 +575,16 @@ async def test_fail_stale_jobs_retention_zero_disables_purge(monkeypatch):
 
     # 5 sweeps (two pending clauses since fix(#1234)) plus the VRT asset
     # UPDATE split into two (ready / degraded, fix(#1322 review round 3))
-    # plus the refresh-run sweep's two statements (feat(#1219), fix(#1274
-    # review)) and no purge DELETE, plus the artifact-carrying SELECT and the
+    # plus the refresh-run sweep's two legacy statements
+    # (feat(#1219), fix(#1274 review)), the keyed-run reconciliation scan
+    # (0082), and no purge DELETE, plus the artifact-carrying SELECT and the
     # post-expiry staging SELECT, both independent of retention.
     # fix(#1709 review r7): +1 — the childless-`fanned_out` reconciliation.
     # fix(#1778 codex r10): +1 — the artifact-carrying SELECT runs outside the
     # retention block on purpose, so a deployment with retention disabled
     # still owes a reap for a row that carries an unpublished storage key or
     # an unadopted analysis table.
-    assert mock_db.execute.await_count == 11
+    assert mock_db.execute.await_count == 12
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,11 @@ from app.platform.jobs.models import owned_presigned_staging_key
 from app.processing.ingest.uploaded_source import UploadedSource
 from app.platform.refresh import verification as refresh_policy
 from app.platform.refresh.credentials import resolve_worker_credential
+from app.platform.refresh.errors import is_transient_run_code
+from app.platform.refresh.publication_fence import (
+    RefreshPublicationFenceError,
+    enforce_publication_fence,
+)
 from app.platform.refresh.service import (
     drift_status_from_diff,
     record_refresh_blocked,
@@ -609,6 +614,7 @@ class _FileReupload:
         )
 
     async def write(self, session, dataset) -> Published:
+        await enforce_publication_fence(session, job_id=self.job_id, dataset=dataset)
         version, schema_diff = await _write_reupload_catalog(
             session,
             dataset=dataset,
@@ -995,16 +1001,12 @@ def _require_service_source_url(value: str | None) -> str:
     return value
 
 
-class RefreshPublicationFenceError(RuntimeError):
-    """A durable source or local-edit publication fence refused the swap."""
-
-    def __init__(self, code: str, message: str):
-        self.code = code
-        super().__init__(message)
-
-
 def _service_refresh_error_code(exc: BaseException) -> str:
     """Map a service re-upload failure onto the refresh-run vocabulary."""
+    import asyncio
+
+    import httpx
+
     from app.platform.refresh.credentials import (
         CredentialExpiredError,
         CredentialStoreUnavailable,
@@ -1020,6 +1022,10 @@ def _service_refresh_error_code(exc: BaseException) -> str:
         return exc.code
     if getattr(exc, "code", None) in (498, 499):
         return "credential_expired"
+    # Transport failures are transient: reconciliation re-drives the same run
+    # instead of failing the scheduled occurrence.
+    if isinstance(exc, (httpx.TransportError, asyncio.TimeoutError)):
+        return "source_unavailable"
     return "service_refresh_failed"
 
 
@@ -1030,51 +1036,9 @@ async def _enforce_refresh_publication_fence(
     dataset,
     verification: dict | None,
 ) -> None:
-    """Refuse a late swap after a scheduled source rebind or local edit."""
-    if verification is None:
-        return
-
-    from app.platform.extensions import get_processing_port
-    from app.platform.refresh.models import DatasetRefreshRun
-
-    run = await session.scalar(
-        select(DatasetRefreshRun).where(DatasetRefreshRun.ingest_job_id == job_id)
-    )
-    if run is None or run.source_binding_fingerprint is None:
-        return
-
-    record_cls = get_processing_port().get_record_orm_class()
-    current_origin, current_record_modified_at = (
-        await session.execute(
-            select(dataset.__class__.origin_ref, record_cls.updated_at)
-            .join(record_cls, record_cls.id == dataset.record_id)
-            .where(dataset.__class__.id == dataset.id)
-        )
-    ).one()
-    if not isinstance(current_origin, dict):
-        raise RefreshPublicationFenceError(
-            "source_changed", "Refresh source changed before publication."
-        )
-    try:
-        current_fingerprint = (
-            refresh_policy.canonical_service_source_binding_fingerprint(current_origin)
-        )
-    except ValueError as exc:
-        raise RefreshPublicationFenceError(
-            "source_changed", "Refresh source changed before publication."
-        ) from exc
-    if current_fingerprint != run.source_binding_fingerprint:
-        raise RefreshPublicationFenceError(
-            "source_changed", "Refresh source changed before publication."
-        )
-    if (
-        run.local_edit_baseline is not None
-        and current_record_modified_at is not None
-        and current_record_modified_at > run.local_edit_baseline
-    ):
-        raise RefreshPublicationFenceError(
-            "local_edits_changed", "Dataset changed locally before refresh publication."
-        )
+    """Compatibility wrapper around the shared platform publication fence."""
+    del verification
+    await enforce_publication_fence(session, job_id=job_id, dataset=dataset)
 
 
 async def _refuse_over_live_writes(session, *, dataset, baseline: int | None) -> None:
@@ -1472,12 +1436,7 @@ class _ServiceReupload:
     async def write(self, session, dataset) -> Published:
         # Runs under the catalog rows, so a rebind or local edit that lands
         # first rolls back the rename before it is published.
-        await _enforce_refresh_publication_fence(
-            session,
-            job_id=self.job_uuid,
-            dataset=dataset,
-            verification=self.verification,
-        )
+        await enforce_publication_fence(session, job_id=self.job_uuid, dataset=dataset)
         if not self.is_refresh:
             await _refuse_over_live_writes(
                 session,
@@ -1518,12 +1477,14 @@ class _ServiceReupload:
         # Exact-value scrub first, in place, before anything reads `exc`: only
         # this task knows the credential's literal value.
         scrub_secret_from_exception(exc, self.token)
+        code = _service_refresh_error_code(exc)
         return Failure(
-            _service_refresh_error_code(exc),
+            code,
             feature_count_after=self.measured_feature_count,
             schema_diff=self.measured_schema_diff,
             verification=self.verification,
             contacted=self.bound if self.contacted else None,
+            transient=is_transient_run_code(code),
         )
 
     async def release(

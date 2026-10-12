@@ -30,6 +30,8 @@ from sqlalchemy.exc import DBAPIError
 from app.core.db.sqlstate import sqlstate
 from app.core.db.tenant_session import tenant_task
 from app.platform.catalog_locks import bump_tile_cache_version_atomic
+from app.platform.refresh.errors import is_transient_run_code
+from app.platform.refresh.publication_fence import enforce_publication_fence
 from app.processing.ingest.catalog_projection import measure, project
 from app.processing.ingest.publication import (
     PUBLISH,
@@ -499,9 +501,10 @@ class _PostgisRefresh:
         # The binding this attempt measured against. None until the
         # measurement reads it: nothing before that says anything about an origin.
         self.bound: tuple | None = None
+        self.job_id: uuid.UUID | None = None
 
     def prepare(self, job, dataset, staging_table: str) -> None:
-        return None
+        self.job_id = job.id
 
     async def fetch(self) -> None:
         from sqlalchemy.orm import joinedload
@@ -626,6 +629,10 @@ class _PostgisRefresh:
                 .execution_options(populate_existing=True)
             )
         ).scalar_one()
+        if self.job_id is not None:
+            await enforce_publication_fence(
+                session, job_id=self.job_id, dataset=dataset
+            )
         if dataset.tile_cache_version != self.content_version:
             raise PostgisRefreshError(
                 "This dataset's data changed while it was being measured, "
@@ -661,6 +668,7 @@ class _PostgisRefresh:
             else None,
             # An edit overtook the measurement, and the message says to refresh again.
             notify=code != _ERROR_CODE_SUPERSEDED,
+            transient=is_transient_run_code(code),
         )
 
     async def release(

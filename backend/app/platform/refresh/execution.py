@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.failure_reason import FixedReason, coded_failure_reason
 from app.platform.jobs import ledger
 from app.platform.jobs.models import IngestJob
+from app.platform.refresh.credentials import CredentialStoreUnavailable
 from app.platform.refresh.models import DatasetRefreshRun
 from app.platform.refresh.service import (
     claim_admitted_run_for_job,
@@ -51,6 +52,8 @@ class RefreshAdmissionRequest:
     verification_policy: str = ARC_GIS_ID_SET_VERIFICATION_POLICY
     credential_reference: str | None = None
     credential_version: str | None = None
+    # Opaque revision of the schedule configuration admitting this run.
+    schedule_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +72,7 @@ class RefreshAdmission:
     claim_deadline: datetime | None
     scheduled_for: datetime | None = None
     occurrence_key: str | None = None
+    schedule_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +81,7 @@ class RefreshExecutionResult:
 
     job_id: UUID
     run_id: UUID
-    status: Literal["completed", "rejected", "already_settled"]
+    status: Literal["completed", "rejected", "already_settled", "redelivered"]
 
 
 class ScheduledRefreshHeld(Exception):
@@ -214,6 +218,7 @@ async def prepare_admitted_refresh(
             verification_policy=request.verification_policy,
             credential_reference=request.credential_reference,
             credential_version=request.credential_version,
+            schedule_version=request.schedule_version,
         )
         if trigger == "scheduled":
             # A restore that committed while the reservation waited on its run
@@ -234,6 +239,7 @@ async def prepare_admitted_refresh(
         claim_deadline=run.claim_deadline,
         scheduled_for=scheduled_for,
         occurrence_key=occurrence_key,
+        schedule_version=request.schedule_version,
     )
 
 
@@ -265,6 +271,125 @@ async def reject_admitted_refresh(
         execution_key=claim_key,
         error_code=reason,
         error_message=f"Refresh was rejected before execution: {reason}.",
+    )
+
+
+async def cancel_admitted_refresh(
+    session: AsyncSession,
+    job_id: UUID,
+    execution_key: str,
+    *,
+    reason: str,
+) -> UUID | None:
+    """Cancel a keyed run and its job, scoped to one delivery's execution key.
+
+    An overlay scheduler uses this when a schedule is disabled or its source
+    is edited after the run was claimed. The key fences the cancel so a stale
+    delivery cannot cancel a run reconciliation re-drove under a newer key.
+    The caller owns the surrounding transaction; ``None`` means the run was
+    already settled or belongs to another delivery.
+    """
+    try:
+        claim_key = UUID(execution_key)
+    except ValueError as exc:
+        raise ValueError("execution_key must be a UUID") from exc
+    if (
+        not reason
+        or len(reason) > 64
+        or not set(reason).issubset(_REJECTION_CODE_CHARACTERS)
+    ):
+        raise ValueError("reason must be a lowercase underscore-delimited code")
+    job = await ledger.hold(session, job_id, expect="pending") or await ledger.hold(
+        session, job_id, expect="running"
+    )
+    if job is None:
+        return None
+    # The job end is not key-scoped, so verify the delivery first: a stale
+    # key must cancel neither the job nor the run it no longer names.
+    active_run = await session.scalar(
+        select(DatasetRefreshRun.id).where(
+            DatasetRefreshRun.ingest_job_id == job_id,
+            DatasetRefreshRun.status.in_(("pending", "running")),
+            DatasetRefreshRun.execution_key == claim_key,
+        )
+    )
+    if active_run is None:
+        return None
+    ended = await ledger.cancel(session, job, actor=None, run_execution_key=claim_key)
+    return ended.linked.get("run")
+
+
+async def _readmit_credential_outage(session: AsyncSession, job_id: UUID) -> bool:
+    """Re-drive a claimed run whose credential vault is temporarily unavailable."""
+    from app.platform.refresh.reconcile import readmit_running_attempt
+
+    job = await session.get(IngestJob, job_id)
+    if job is None or job.attempt_id is None:
+        return False
+    redelivery = await readmit_running_attempt(
+        session,
+        job_id=job_id,
+        attempt_id=job.attempt_id,
+        code="credential_store_unavailable",
+        message="The credential store was temporarily unavailable.",
+        expect=("pending",),
+    )
+    return redelivery is not None
+
+
+async def _resolve_credential(
+    job_id: UUID,
+    run_id: UUID,
+    claim_key: uuid.UUID,
+    *,
+    reference: str,
+    version: str | None,
+    resolver: CredentialResolver | None,
+) -> tuple[str | None, RefreshExecutionResult | None]:
+    """Resolve the run's credential, or settle/re-drive the run on failure."""
+    from app.core.db import async_session
+
+    if resolver is None:
+        resolver_error: BaseException = RuntimeError(
+            "No credential resolver is available for this scheduled refresh."
+        )
+    else:
+        try:
+            token = await resolver(reference, version)
+        except (
+            Exception
+        ) as exc:  # broad: vault implementations surface provider-specific failures
+            resolver_error = exc
+        else:
+            if token:
+                return token, None
+            resolver_error = RuntimeError(
+                "Credential resolver returned no credential for this refresh."
+            )
+
+    async with async_session() as session:
+        redelivered = False
+        if isinstance(resolver_error, CredentialStoreUnavailable):
+            # The credential vault is temporarily down: re-drive the same
+            # run instead of failing the scheduled occurrence.
+            redelivered = await _readmit_credential_outage(session, job_id)
+        if not redelivered:
+            await fail_claimed_admitted_refresh(
+                session,
+                ingest_job_id=job_id,
+                execution_key=claim_key,
+                error_code="scheduled_credential_unavailable",
+                error_message=coded_failure_reason(
+                    "Scheduled refresh credential resolution failed",
+                    resolver_error,
+                ),
+            )
+        await session.commit()
+    outcome_status: Literal["redelivered", "rejected"] = (
+        "redelivered" if redelivered else "rejected"
+    )
+    return None, RefreshExecutionResult(
+        job_id=job_id, run_id=run_id, status=outcome_status
     )
 
 
@@ -358,42 +483,19 @@ async def execute_admitted_refresh(
                     job_id=job_id, run_id=claimed_run_id, status="rejected"
                 )
 
-    token: str | None = None
     if credential_reference is not None:
-        if credential_resolver is None:
-            resolver_error: BaseException = RuntimeError(
-                "No credential resolver is available for this scheduled refresh."
-            )
-        else:
-            try:
-                token = await credential_resolver(
-                    credential_reference, credential_version
-                )
-                resolver_error = (
-                    None
-                    if token
-                    else RuntimeError(
-                        "Credential resolver returned no credential for this refresh."
-                    )
-                )
-            except Exception as exc:  # broad: vault implementations surface provider-specific credential failures
-                resolver_error = exc
-        if resolver_error is not None:
-            async with async_session() as session:
-                await fail_claimed_admitted_refresh(
-                    session,
-                    ingest_job_id=job_id,
-                    execution_key=claim_key,
-                    error_code="scheduled_credential_unavailable",
-                    error_message=coded_failure_reason(
-                        "Scheduled refresh credential resolution failed",
-                        resolver_error,
-                    ),
-                )
-                await session.commit()
-            return RefreshExecutionResult(
-                job_id=job_id, run_id=claimed_run_id, status="rejected"
-            )
+        token, credential_outcome = await _resolve_credential(
+            job_id,
+            claimed_run_id,
+            claim_key,
+            reference=credential_reference,
+            version=credential_version,
+            resolver=credential_resolver,
+        )
+        if credential_outcome is not None:
+            return credential_outcome
+    else:
+        token = None
 
     task = get_catalog_port().verified_refresh_service_task()
     try:

@@ -432,7 +432,9 @@ async def test_cleanup_and_retention_reaper_delete_only_tenant_key(
     # moved OUT of this block entirely, into the unconditional
     # artifact-carrying SELECT that now runs after the purge (see below), so
     # nothing here answers it any more.
-    empty_scalars = [MagicMock() for _ in range(9)]
+    # 0082: ten — the same stale pass runs the keyed refresh-run
+    # reconciliation scan alongside the legacy refresh-run sweep.
+    empty_scalars = [MagicMock() for _ in range(10)]
     for result in empty_scalars:
         result.scalars.return_value = []
         result.all.return_value = []
