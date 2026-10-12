@@ -255,10 +255,10 @@ export function useRemoveLayer() {
   });
 }
 
-export function useSharedMap(token: string | undefined, apiKey?: string, embedToken?: string) {
+export function useSharedMap(token: string | undefined, embedToken?: string) {
   return useQuery({
-    queryKey: queryKeys.maps.sharedMap(token, apiKey, embedToken),
-    queryFn: () => getSharedMap(token!, apiKey, embedToken),
+    queryKey: queryKeys.maps.sharedMap(token, embedToken),
+    queryFn: () => getSharedMap(token!, embedToken),
     enabled: !!token,
     retry: false,
     staleTime: 30_000,

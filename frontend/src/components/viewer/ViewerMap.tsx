@@ -74,8 +74,8 @@ import '@/lib/maplibre-worker';
  * theme. Layer rendering uses the unified `layer-adapters` registry shared
  * with the builder, ensuring viewer + builder produce identical visuals.
  *
- * Authentication is implicit: signed share or embed tokens are passed in via
- * `apiKey` (query parameter) and used to sign tile URLs.
+ * Embed viewers pass `embedToken`, which the tile-token and GeoJSON requests
+ * forward in place of a session.
  */
 interface ViewerMapProps {
   layers: SharedLayerResponse[];
@@ -89,7 +89,6 @@ interface ViewerMapProps {
   };
   visibleLayers: Set<string>;
   onMapReady?: (map: MaplibreMap) => void;
-  apiKey?: string;
   embedToken?: string;
   basemapConfig?: MapBasemapConfig | null;
   showBasemapLabels?: boolean;
@@ -140,7 +139,6 @@ export const ViewerMap = memo(function ViewerMap({
   initialViewState,
   visibleLayers,
   onMapReady,
-  apiKey,
   embedToken,
   basemapConfig = null,
   showBasemapLabels = true,
@@ -179,7 +177,7 @@ export const ViewerMap = memo(function ViewerMap({
   );
 
   // Tile token management (fetch, auto-refresh, error toast)
-  const { tokenMap, refreshTokens } = useViewerTokens({ layers, apiKey, embedToken });
+  const { tokenMap, refreshTokens } = useViewerTokens({ layers, embedToken });
   // Shared tile-auth recovery: a vector tile 401/403 kicks one throttled token
   // re-mint, and the sync pass re-signs the sources once the new token lands.
   // fix(#890): report every mint the recovery path actually kicks (suppressed),
@@ -254,9 +252,8 @@ export const ViewerMap = memo(function ViewerMap({
   );
   const boundedGeoJsonRequest = useMemo(() => ({
     layers: boundedGeoJsonLayers,
-    apiKey,
     embedToken,
-  }), [boundedGeoJsonLayers, apiKey, embedToken]);
+  }), [boundedGeoJsonLayers, embedToken]);
   const completedBoundedGeoJsonRequestRef = useRef<object | null>(null);
   const [geojsonVersion, setGeojsonVersion] = useState(0);
 
@@ -374,7 +371,7 @@ export const ViewerMap = memo(function ViewerMap({
       await Promise.all(
         boundedGeoJsonLayers.map(async ({ layer, key }) => {
           try {
-            const data = await fetchBoundedGeoJson(layer.dataset_id, { apiKey, embedToken, signal: controller.signal });
+            const data = await fetchBoundedGeoJson(layer.dataset_id, { embedToken, signal: controller.signal });
             if (!cancelled && !data.truncated && data.total_count <= getClusterSourceEligibility(layer).limit) {
               newMap.set(key, asFeatureCollection(data));
             }
@@ -398,7 +395,7 @@ export const ViewerMap = memo(function ViewerMap({
       cancelled = true;
       controller.abort();
     };
-  }, [boundedGeoJsonLayers, boundedGeoJsonRequest, apiKey, embedToken, t]);
+  }, [boundedGeoJsonLayers, boundedGeoJsonRequest, embedToken, t]);
 
   // Trigger repaint when bounded GeoJSON arrives and map is ready
   useEffect(() => {

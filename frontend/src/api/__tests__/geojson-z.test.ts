@@ -64,28 +64,15 @@ describe('fetchBoundedGeoJson', () => {
     );
   });
 
-  // fix(#833): the API key must travel in the X-Api-Key header, never the
-  // query string (query strings land in server/proxy logs).
-  it('uses the X-Api-Key header for public API-key contexts', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse(boundedGeoJson));
-
-    await fetchBoundedGeoJson('dataset-1', { apiKey: 'key 1' });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/datasets/dataset-1/features.geojson',
-      { headers: { 'X-Api-Key': 'key 1' }, signal: expect.any(AbortSignal) },
-    );
-  });
-
   it('keeps fetchGeoJsonZ as a compatibility alias', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(boundedGeoJson));
 
-    const response = await fetchGeoJsonZ('dataset-1', { apiKey: 'key' });
+    const response = await fetchGeoJsonZ('dataset-1', { embedToken: 'embed-token' });
 
     expect(response).toEqual(boundedGeoJson);
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/datasets/dataset-1/features.geojson',
-      { headers: { 'X-Api-Key': 'key' }, signal: expect.any(AbortSignal) },
+      { headers: { 'X-Embed-Token': 'embed-token' }, signal: expect.any(AbortSignal) },
     );
   });
 
@@ -119,7 +106,7 @@ describe('fetchBoundedGeoJson', () => {
   it('throws for failed direct bounded GeoJSON requests', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'Forbidden' }, 403));
 
-    await expect(fetchBoundedGeoJson('dataset-1', { apiKey: 'bad' }))
+    await expect(fetchBoundedGeoJson('dataset-1', { embedToken: 'bad' }))
       .rejects
       .toThrow('Access denied');
   });
@@ -130,7 +117,7 @@ describe('fetchBoundedGeoJson', () => {
       init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
     }));
 
-    const pending = fetchBoundedGeoJson('dataset-1', { apiKey: 'k', signal: controller.signal });
+    const pending = fetchBoundedGeoJson('dataset-1', { embedToken: 'k', signal: controller.signal });
     controller.abort(new Error('stale'));
 
     await expect(pending).rejects.toThrow('stale');

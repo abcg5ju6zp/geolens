@@ -49,11 +49,9 @@ function refreshIntervalMs(data: TileTokenBatchResponse | undefined): number | f
  */
 export function useViewerTokens({
   layers,
-  apiKey,
   embedToken,
 }: {
   layers: SharedLayerResponse[];
-  apiKey?: string;
   embedToken?: string;
 }) {
   const { t } = useTranslation('common');
@@ -70,8 +68,8 @@ export function useViewerTokens({
   // descriptors (bounds, resolution-derived maxzoom) as normal viewers instead
   // of building the terrain source from empty defaults.
   const query = useQuery({
-    queryKey: queryKeys.tileTokens.viewerBatch(sortedIds, `${apiKey ?? ''}|${embedToken ?? ''}`),
-    queryFn: () => getTileTokensBatch(layerDatasetIds, apiKey, embedToken),
+    queryKey: queryKeys.tileTokens.viewerBatch(sortedIds, embedToken ?? ''),
+    queryFn: () => getTileTokensBatch(layerDatasetIds, embedToken),
     enabled: layerDatasetIds.length > 0,
     staleTime: 60_000,
     // Bounded backoff for a transient hiccup (parity with useTileTokens).

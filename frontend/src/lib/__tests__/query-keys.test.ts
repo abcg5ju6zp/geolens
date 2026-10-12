@@ -108,11 +108,9 @@ describe('queryKeys factory', () => {
     });
 
     it('sharedMap includes token', () => {
-      // fix(#394) B-023: the key gained an embedToken slot so embed viewers
-      // don't share cache entries with the anonymous payload.
-      expect(queryKeys.maps.sharedMap('tok123')).toEqual(['shared-map', 'tok123', undefined, undefined]);
-      expect(queryKeys.maps.sharedMap('tok123', 'key')).toEqual(['shared-map', 'tok123', 'key', undefined]);
-      expect(queryKeys.maps.sharedMap('tok123', undefined, 'et_x')).toEqual(['shared-map', 'tok123', undefined, 'et_x']);
+      // Embed viewers don't share cache entries with the anonymous payload.
+      expect(queryKeys.maps.sharedMap('tok123')).toEqual(['shared-map', 'tok123', undefined]);
+      expect(queryKeys.maps.sharedMap('tok123', 'et_x')).toEqual(['shared-map', 'tok123', 'et_x']);
     });
 
     it('columnValues includes datasetId and col', () => {

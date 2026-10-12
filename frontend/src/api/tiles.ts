@@ -1,6 +1,4 @@
-import { apiFetch, safeFetch } from '@/api/client';
-import { API_BASE } from '@/lib/constants';
-import { translateApiErrorDetail } from '@/lib/error-map';
+import { apiFetch } from '@/api/client';
 
 export type VectorTileToken = {
   kind: 'vector';
@@ -68,29 +66,8 @@ export type TileTokenBatchResponse = {
  */
 // fix(#394) SH-04: embed viewers pass their X-Embed-Token so scoped datasets
 // mint the same tile/DEM descriptors an authenticated viewer would get.
-export function getTileTokensBatch(datasetIds: string[], apiKey?: string, embedToken?: string): Promise<TileTokenBatchResponse> {
+export function getTileTokensBatch(datasetIds: string[], embedToken?: string): Promise<TileTokenBatchResponse> {
   const embedHeader: Record<string, string> = embedToken ? { 'X-Embed-Token': embedToken } : {};
-  if (apiKey) {
-    // fix(#438): DATA-11 — the API-key branch used a bare `fetch()`, so a
-    // network failure surfaced as a raw `TypeError` while the JWT branch below
-    // (via apiFetch → safeFetch) yielded a normalized status-0 ApiError.
-    // safeFetch gives both branches the same error shape.
-    return safeFetch(`${API_BASE}/tiles/tokens/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey, ...embedHeader },
-      body: JSON.stringify({ dataset_ids: datasetIds }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        let detail: unknown;
-        try {
-          const body = await res.json();
-          detail = body.detail;
-        } catch { /* not JSON */ }
-        throw new Error(translateApiErrorDetail(detail, res.status));
-      }
-      return res.json() as Promise<TileTokenBatchResponse>;
-    });
-  }
   return apiFetch<TileTokenBatchResponse>('/tiles/tokens/', {
     method: 'POST',
     headers: embedHeader,

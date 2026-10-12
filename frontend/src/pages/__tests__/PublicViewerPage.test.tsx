@@ -203,6 +203,16 @@ describe('PublicViewerPage', () => {
     expect(legendMock.props?.drawn).toBe(drawn);
   });
 
+  it('sends no credential taken from an api_key query parameter', async () => {
+    renderPage('/m/share-token?api_key=account-key&et=embed-token');
+
+    await screen.findByTestId('viewer-map');
+
+    expect(mockedUseSharedMap).toHaveBeenCalledWith('share-token', 'embed-token');
+    expect(JSON.stringify(mockedUseSharedMap.mock.calls)).not.toContain('account-key');
+    expect(JSON.stringify(viewerMapMock.props)).not.toContain('account-key');
+  });
+
   it('forwards persisted basemap appearance into the viewer map', async () => {
     renderPage();
 

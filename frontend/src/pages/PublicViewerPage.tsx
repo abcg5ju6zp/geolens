@@ -50,13 +50,12 @@ function PublicViewer() {
   const { token } = useParams<{ token: string }>();
   const [searchParams] = useSearchParams();
   const isEmbed = searchParams.get('embed') === 'true';
-  const apiKey = searchParams.get('api_key') ?? undefined;
   const embedToken = searchParams.get('et') ?? undefined;
   const zoomParam = searchParams.get('zoom');
   const centerParam = searchParams.get('center');
   const legendParam = searchParams.get('legend');
 
-  const { data, isLoading, isError, error } = useSharedMap(token, apiKey, embedToken);
+  const { data, isLoading, isError, error } = useSharedMap(token, embedToken);
   useDocumentTitle(data?.name || t('common:pageTitle.sharedMap'));
 
   const effectiveShowLegend = legendParam !== null ? legendParam === 'true' : !isEmbed;
@@ -169,7 +168,6 @@ function PublicViewer() {
             terrainConfig={data.terrain_config ?? null}
             initialViewState={viewState}
             visibleLayers={visibleLayers}
-            apiKey={apiKey}
             embedToken={embedToken}
             onDrawnChange={setDrawnLayers}
           />

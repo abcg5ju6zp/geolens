@@ -96,7 +96,7 @@ const SHARED_LAYERS = [polygon, cluster].map(toSharedLayer);
 const VISIBLE = new Set([polygon.id, cluster.id]);
 
 /** The map and its legend, joined through state the way the viewer pages join them. */
-function ViewerWithLegend({ apiKey }: { apiKey: string }) {
+function ViewerWithLegend({ embedToken }: { embedToken: string }) {
   const [drawn, setDrawn] = useState<ReadonlyMap<string, DrawnLayer>>();
   return (
     <>
@@ -105,7 +105,7 @@ function ViewerWithLegend({ apiKey }: { apiKey: string }) {
         basemapStyle={BLANK_BASEMAP_ID}
         initialViewState={{ center_lng: 0, center_lat: 0, zoom: 2, bearing: 0, pitch: 0 }}
         visibleLayers={VISIBLE}
-        apiKey={apiKey}
+        embedToken={embedToken}
         onDrawnChange={setDrawn}
       />
       <LayerLegend layers={SHARED_LAYERS} visibleLayers={VISIBLE} onToggleVisibility={vi.fn()} isOpen onToggle={vi.fn()} drawn={drawn} />
@@ -141,12 +141,12 @@ describe('ViewerMap drawn layers', () => {
 
   it('lets the legend name the saved strategy again while a new bounded GeoJSON request loads', async () => {
     vi.mocked(fetchBoundedGeoJson).mockRejectedValue(new Error('offline'));
-    const { rerender } = render(<ViewerWithLegend apiKey="first" />);
+    const { rerender } = render(<ViewerWithLegend embedToken="first" />);
     const bikeRacks = () => within(within(screen.getByRole('region', { name: 'Layers' })).getByText('Bike racks').closest('li')!);
     await waitFor(() => expect(bikeRacks().getByText('Point fallback')).toBeInTheDocument());
 
     vi.mocked(fetchBoundedGeoJson).mockReturnValue(new Promise(() => {}));
-    rerender(<ViewerWithLegend apiKey="second" />);
+    rerender(<ViewerWithLegend embedToken="second" />);
 
     await waitFor(() => expect(bikeRacks().getByText('Bounded cluster')).toBeInTheDocument());
   });

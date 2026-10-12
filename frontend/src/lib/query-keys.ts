@@ -72,8 +72,8 @@ export const queryKeys = {
     aiAvailability: ['ai-availability'] as const,
     shareToken: (mapId: string | undefined) => ['map-share-token', mapId] as const,
     embedTokens: (mapId: string | undefined) => ['map-embed-tokens', mapId] as const,
-    sharedMap: (token: string | undefined, apiKey?: string, embedToken?: string) =>
-      ['shared-map', token, apiKey, embedToken] as const,
+    sharedMap: (token: string | undefined, embedToken?: string) =>
+      ['shared-map', token, embedToken] as const,
     columnValues: (datasetId: string | undefined, col: string | undefined) =>
       ['column-values', datasetId, col] as const,
     columnValuesPrefix: (datasetId: string) => ['column-values', datasetId] as const,
@@ -230,7 +230,7 @@ export const queryKeys = {
     token: (datasetId: string | undefined) => ['tile-token', datasetId] as const,
     batch: (sortedIds: string) => ['tile-tokens-batch', sortedIds] as const,
     // Keep the viewer batch separate because it
-    // mints with an API key / embed token instead of the session JWT, and those
+    // mints with an embed token instead of the session JWT, and those
     // grants scope differently — sharing one cache entry would serve a viewer
     // tokens minted for someone else's scope. `auth` is that discriminator, and
     // it stays out of bug reports because main.tsx's reportQueryKey serializes
