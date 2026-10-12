@@ -59,7 +59,7 @@ export function useQuicklook(
     queryFn: async () => {
       const params = new URLSearchParams({ size: String(size) });
       if (version) params.set('v', version);
-      const blob = await apiFetchBlob(`/datasets/${datasetId}/quicklook?${params}`);
+      const blob = await apiFetchBlob(`/datasets/${encodeURIComponent(datasetId!)}/quicklook?${params}`);
       return URL.createObjectURL(blob);
     },
     enabled: datasetId != null && !knownMissing,

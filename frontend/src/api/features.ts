@@ -57,7 +57,7 @@ export async function createFeature(
     headers['Idempotency-Key'] = idempotencyKey;
     if (attempt !== undefined) headers['Idempotency-Attempt'] = String(attempt);
   }
-  return apiFetch<GeoJSONFeatureWrite>(`/datasets/${datasetId}/features/`, {
+  return apiFetch<GeoJSONFeatureWrite>(`/datasets/${encodeURIComponent(datasetId)}/features/`, {
     method: 'POST',
     headers: Object.keys(headers).length > 0 ? headers : undefined,
     body: JSON.stringify({ geometry, properties: properties ?? {} }),
@@ -68,11 +68,11 @@ export async function getFeature(
   datasetId: string,
   gid: number,
 ): Promise<GeoJSONFeature> {
-  return apiFetch<GeoJSONFeature>(`/datasets/${datasetId}/features/${gid}`);
+  return apiFetch<GeoJSONFeature>(`/datasets/${encodeURIComponent(datasetId)}/features/${encodeURIComponent(gid)}`);
 }
 
 function featurePath(datasetId: string, gid: number, tableId?: string | null): string {
-  const path = `/datasets/${datasetId}/features/${gid}`;
+  const path = `/datasets/${encodeURIComponent(datasetId)}/features/${encodeURIComponent(gid)}`;
   return tableId ? `${path}?table_id=${encodeURIComponent(tableId)}` : path;
 }
 

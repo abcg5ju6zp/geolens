@@ -126,11 +126,11 @@ export async function updateUser(userId: string, data: {
   status?: 'active' | 'suspended' | 'deactivated';
   role?: string;
 }): Promise<UserResponse> {
-  return apiFetch<UserResponse>(`/admin/users/${userId}`, { method: 'PATCH', body: JSON.stringify(data) });
+  return apiFetch<UserResponse>(`/admin/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
 export async function deactivateUser(userId: string): Promise<UserResponse> {
-  return apiFetch<UserResponse>(`/admin/users/${userId}/deactivate/`, { method: 'POST' });
+  return apiFetch<UserResponse>(`/admin/users/${encodeURIComponent(userId)}/deactivate/`, { method: 'POST' });
 }
 
 /**
@@ -139,22 +139,22 @@ export async function deactivateUser(userId: string): Promise<UserResponse> {
  * outstanding sessions and API keys as part of the same request.
  */
 export async function resetUserPassword(userId: string, password: string): Promise<UserResponse> {
-  return apiFetch<UserResponse>(`/admin/users/${userId}/reset-password/`, {
+  return apiFetch<UserResponse>(`/admin/users/${encodeURIComponent(userId)}/reset-password/`, {
     method: 'POST',
     body: JSON.stringify({ password }),
   });
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  await apiFetch(`/admin/users/${userId}`, { method: 'DELETE' });
+  await apiFetch(`/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
 }
 
 export async function approveUser(userId: string, role: string): Promise<UserResponse> {
-  return apiFetch<UserResponse>(`/admin/users/${userId}/approve/`, { method: 'POST', body: JSON.stringify({ role }) });
+  return apiFetch<UserResponse>(`/admin/users/${encodeURIComponent(userId)}/approve/`, { method: 'POST', body: JSON.stringify({ role }) });
 }
 
 export async function rejectUser(userId: string): Promise<void> {
-  await apiFetch(`/admin/users/${userId}/reject/`, { method: 'POST' });
+  await apiFetch(`/admin/users/${encodeURIComponent(userId)}/reject/`, { method: 'POST' });
 }
 
 // API Key management
@@ -171,7 +171,7 @@ export async function listApiKeys(
   const skip = options.skip ?? 0;
   const limit = options.limit ?? 50;
   return apiFetch<{ items: ApiKeyResponse[]; total: number }>(
-    `/admin/api-keys/?user_id=${userId}&skip=${skip}&limit=${limit}`,
+    `/admin/api-keys/?user_id=${encodeURIComponent(userId)}&skip=${skip}&limit=${limit}`,
   );
 }
 
@@ -194,7 +194,7 @@ export async function createApiKey(
 }
 
 export async function revokeApiKey(keyId: string): Promise<void> {
-  await apiFetch(`/admin/api-keys/${keyId}`, { method: 'DELETE' });
+  await apiFetch(`/admin/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' });
 }
 
 // Share tokens
@@ -220,7 +220,7 @@ export async function listShareTokens(
 }
 
 export async function adminRevokeShareToken(tokenId: string): Promise<void> {
-  await apiFetch(`/admin/share-tokens/${tokenId}`, { method: 'DELETE' });
+  await apiFetch(`/admin/share-tokens/${encodeURIComponent(tokenId)}`, { method: 'DELETE' });
 }
 
 // Embed tokens
@@ -308,7 +308,7 @@ export async function exportAuditLogs(
   if (filters.date_to) query.set('date_to', filters.date_to);
   if (filters.search) query.set('search', filters.search);
   const qs = query.toString();
-  const url = `${API_BASE}/admin/audit-logs/export/${format}${qs ? `?${qs}` : ''}`;
+  const url = `${API_BASE}/admin/audit-logs/export/${encodeURIComponent(format)}${qs ? `?${qs}` : ''}`;
 
   // BUG-035: refresh-aware raw fetch so an export issued as the first request
   // after a long idle transparently refreshes the JWT instead of 401-ing.

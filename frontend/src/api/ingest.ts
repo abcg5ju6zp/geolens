@@ -251,7 +251,7 @@ export async function uploadFromUrl(
 export async function getJobStatus(
   jobId: string,
 ): Promise<JobStatusResponse> {
-  return apiFetch<JobStatusResponse>(`/jobs/${jobId}`);
+  return apiFetch<JobStatusResponse>(`/jobs/${encodeURIComponent(jobId)}`);
 }
 
 export async function getJobStatusByDataset(
@@ -261,7 +261,7 @@ export async function getJobStatusByDataset(
   // job (remote/STAC/registered dataset); apiFetch resolves the null JSON body
   // to null. A genuine 404 (dataset not visible) still throws ApiError.
   // expected404 also keeps older servers (pre-200+null) from throwing here.
-  return apiFetch<JobStatusResponse | null>(`/jobs/by-dataset/${datasetId}`, {
+  return apiFetch<JobStatusResponse | null>(`/jobs/by-dataset/${encodeURIComponent(datasetId)}`, {
     expected404: true,
   });
 }
@@ -278,8 +278,8 @@ const PREVIEW_TIMEOUT_MS = 630_000;
 
 export async function previewFile(jobId: string, layerName?: string): Promise<FilePreviewResponse | RasterPreviewResponse | TilesetPreviewResponse | PointCloudPreviewResponse> {
   const url = layerName
-    ? `/ingest/preview/${jobId}?layer_name=${encodeURIComponent(layerName)}`
-    : `/ingest/preview/${jobId}`;
+    ? `/ingest/preview/${encodeURIComponent(jobId)}?layer_name=${encodeURIComponent(layerName)}`
+    : `/ingest/preview/${encodeURIComponent(jobId)}`;
   try {
     return await apiFetch<FilePreviewResponse | RasterPreviewResponse | TilesetPreviewResponse | PointCloudPreviewResponse>(url, {
       method: 'POST',
@@ -312,7 +312,7 @@ export async function commitImport(
   // nothing written to the report buffer at all (a different gap from the
   // upload/preview one: no capture attempt existed here previously).
   try {
-    return await apiFetch<CommitImportResponse>(`/ingest/commit/${jobId}`, {
+    return await apiFetch<CommitImportResponse>(`/ingest/commit/${encodeURIComponent(jobId)}`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -323,7 +323,7 @@ export async function commitImport(
 }
 
 export async function retryJob(jobId: string): Promise<UploadResponse> {
-  return apiFetch<UploadResponse>(`/jobs/${jobId}/retry`, {
+  return apiFetch<UploadResponse>(`/jobs/${encodeURIComponent(jobId)}/retry`, {
     method: 'POST',
   });
 }
@@ -332,7 +332,7 @@ export async function retryJob(jobId: string): Promise<UploadResponse> {
 // the job row (and its bound refresh run) to `cancelled` and commits before
 // the best-effort queue abort, so a 200 here is durable.
 export async function cancelJob(jobId: string): Promise<JobCancelResponse> {
-  return apiFetch<JobCancelResponse>(`/jobs/${jobId}/cancel`, {
+  return apiFetch<JobCancelResponse>(`/jobs/${encodeURIComponent(jobId)}/cancel`, {
     method: 'POST',
   });
 }
@@ -443,7 +443,7 @@ export async function completePresignedUpload(
   parts?: { etag: string; part_number: number }[],
 ): Promise<UploadResponse> {
   try {
-    return await apiFetch<UploadResponse>(`/ingest/upload/presigned/${jobId}/complete`, {
+    return await apiFetch<UploadResponse>(`/ingest/upload/presigned/${encodeURIComponent(jobId)}/complete`, {
       method: 'POST',
       body: JSON.stringify({ parts: parts ?? [] }),
     });

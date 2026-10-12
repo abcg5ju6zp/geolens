@@ -7,7 +7,7 @@ import type {
 } from '@/types/api';
 
 export async function listVrtSources(datasetId: string): Promise<VrtSourceListResponse> {
-  return apiFetch<VrtSourceListResponse>(`/datasets/${datasetId}/vrt-sources/`);
+  return apiFetch<VrtSourceListResponse>(`/datasets/${encodeURIComponent(datasetId)}/vrt-sources/`);
 }
 
 export async function addVrtSource(
@@ -31,7 +31,7 @@ export async function removeVrtSource(
 }
 
 export async function getVrtStatus(datasetId: string): Promise<VrtStatusResponse> {
-  return apiFetch<VrtStatusResponse>(`/datasets/${datasetId}/vrt/status/`);
+  return apiFetch<VrtStatusResponse>(`/datasets/${encodeURIComponent(datasetId)}/vrt/status/`);
 }
 
 export async function getVrtGenerations(
@@ -43,7 +43,7 @@ export async function getVrtGenerations(
   if (params?.offset) qs.set('offset', String(params.offset));
   const query = qs.toString();
   return apiFetch<VrtGenerationListResponse>(
-    `/datasets/${datasetId}/vrt/generations/${query ? `?${query}` : ''}`,
+    `/datasets/${encodeURIComponent(datasetId)}/vrt/generations/${query ? `?${query}` : ''}`,
   );
 }
 

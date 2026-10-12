@@ -41,7 +41,7 @@ export async function createDataset(data: CreateDatasetRequest): Promise<Dataset
 }
 
 export async function getDataset(id: string): Promise<DatasetResponse> {
-  return apiFetch<DatasetResponse>(`/datasets/${id}`);
+  return apiFetch<DatasetResponse>(`/datasets/${encodeURIComponent(id)}`);
 }
 
 export async function getDatasetRows(
@@ -57,7 +57,7 @@ export async function getDatasetRows(
     }
   }
   const qs = query.toString();
-  return apiFetch<DatasetRowsResponse>(`/datasets/${id}/rows/${qs ? `?${qs}` : ''}`);
+  return apiFetch<DatasetRowsResponse>(`/datasets/${encodeURIComponent(id)}/rows/${qs ? `?${qs}` : ''}`);
 }
 
 export function getExportUrl(
@@ -69,12 +69,12 @@ export function getExportUrl(
   if (options.target_crs) query.set('target_crs', options.target_crs);
   if (options.bbox) query.set('bbox', options.bbox);
   if (options.where) query.set('where', options.where);
-  return `${API_BASE}/datasets/${id}/export?${query.toString()}`;
+  return `${API_BASE}/datasets/${encodeURIComponent(id)}/export?${query.toString()}`;
 }
 
 /** Path for the COG download endpoint. Centralised so `/download/cog` lives in one place. */
 export function getCogDownloadUrl(id: string): string {
-  return `${API_BASE}/datasets/${id}/download/cog`;
+  return `${API_BASE}/datasets/${encodeURIComponent(id)}/download/cog`;
 }
 
 // fix(#1863 P1): exported so any same-origin GeoLens API resource can be
@@ -123,7 +123,7 @@ export async function downloadExport(
  */
 export async function mintDownloadToken(id: string): Promise<string> {
   const data = await apiFetch<{ token: string; expires_in: number }>(
-    `/auth/download-token/${id}`,
+    `/auth/download-token/${encodeURIComponent(id)}`,
     { method: 'POST' }
   );
   return data.token;
@@ -137,7 +137,7 @@ export async function mintDownloadToken(id: string): Promise<string> {
  */
 export async function downloadCog(id: string): Promise<void> {
   const downloadToken = await mintDownloadToken(id);
-  const url = new URL(`${API_BASE}/datasets/${id}/download/cog`, window.location.origin);
+  const url = new URL(`${API_BASE}/datasets/${encodeURIComponent(id)}/download/cog`, window.location.origin);
   url.searchParams.set('token', downloadToken);
   window.open(url.toString(), '_blank');
 }
@@ -146,7 +146,7 @@ export async function updateDataset(
   id: string,
   data: DatasetUpdateRequest,
 ): Promise<DatasetResponse> {
-  return apiFetch<DatasetResponse>(`/datasets/${id}`, {
+  return apiFetch<DatasetResponse>(`/datasets/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
@@ -160,7 +160,7 @@ export async function setTargetStatus(
   id: string,
   status: string,
 ): Promise<StatusUpdateResponse> {
-  return apiFetch<StatusUpdateResponse>(`/datasets/${id}/target-status/`, {
+  return apiFetch<StatusUpdateResponse>(`/datasets/${encodeURIComponent(id)}/target-status/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -171,7 +171,7 @@ export async function deleteDataset(
   id: string,
   confirmName: string,
 ): Promise<void> {
-  await apiFetch(`/datasets/${id}`, {
+  await apiFetch(`/datasets/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     body: JSON.stringify({ confirm_title: confirmName }),
   });
@@ -185,7 +185,7 @@ export async function getDatasetHistory(
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   const qs = query.toString();
-  return apiFetch<AuditLogListResponse>(`/datasets/${id}/history${qs ? `?${qs}` : ''}`);
+  return apiFetch<AuditLogListResponse>(`/datasets/${encodeURIComponent(id)}/history${qs ? `?${qs}` : ''}`);
 }
 
 // fix(#1778): apiFetch's 30s default aborts a large (up to 500 MB) re-upload
@@ -201,7 +201,7 @@ export async function reuploadDataset(
   formData.append('file', file);
 
   try {
-    return await apiFetch<ReuploadResponse>(`/datasets/${datasetId}/reupload`, {
+    return await apiFetch<ReuploadResponse>(`/datasets/${encodeURIComponent(datasetId)}/reupload`, {
       method: 'POST',
       body: formData,
       timeoutMs: REUPLOAD_TIMEOUT_MS,
@@ -219,7 +219,7 @@ export async function reuploadPreview(
 ): Promise<ReuploadPreviewResponse> {
   const body = layerName !== undefined ? JSON.stringify({ layer_name: layerName }) : undefined;
   try {
-    return await apiFetch<ReuploadPreviewResponse>(`/datasets/${datasetId}/reupload/${jobId}/preview`, {
+    return await apiFetch<ReuploadPreviewResponse>(`/datasets/${encodeURIComponent(datasetId)}/reupload/${encodeURIComponent(jobId)}/preview`, {
       method: 'POST',
       ...(body ? { body } : {}),
     });
@@ -233,7 +233,7 @@ export async function reuploadServicePreview(
   request: ReuploadServicePreviewRequest,
 ): Promise<ReuploadPreviewResponse> {
   try {
-    return await apiFetch<ReuploadPreviewResponse>(`/datasets/${datasetId}/reupload/service/preview`, {
+    return await apiFetch<ReuploadPreviewResponse>(`/datasets/${encodeURIComponent(datasetId)}/reupload/service/preview`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -268,7 +268,7 @@ export async function reuploadCommit(
   };
 
   try {
-    return await apiFetch<ReuploadCommitResponse>(`/datasets/${datasetId}/reupload/${jobId}/commit`, {
+    return await apiFetch<ReuploadCommitResponse>(`/datasets/${encodeURIComponent(datasetId)}/reupload/${encodeURIComponent(jobId)}/commit`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -282,7 +282,7 @@ export async function addColumn(
   column: { name: string; type: string },
 ): Promise<{ columns: { name: string; type: string }[] }> {
   return apiFetch<{ columns: { name: string; type: string }[] }>(
-    `/layers/${datasetId}/columns/`,
+    `/layers/${encodeURIComponent(datasetId)}/columns/`,
     {
       method: 'POST',
       body: JSON.stringify({ column }),
@@ -295,7 +295,7 @@ export async function dropColumn(
   columnName: string,
 ): Promise<{ columns: { name: string; type: string }[] }> {
   return apiFetch<{ columns: { name: string; type: string }[] }>(
-    `/layers/${datasetId}/columns/${columnName}`,
+    `/layers/${encodeURIComponent(datasetId)}/columns/${encodeURIComponent(columnName)}`,
     {
       method: 'DELETE',
     },
@@ -307,7 +307,7 @@ export async function getColumnReferences(
   columnName: string,
 ): Promise<{ map_count: number }> {
   return apiFetch<{ map_count: number }>(
-    `/layers/${datasetId}/columns/${columnName}/references`,
+    `/layers/${encodeURIComponent(datasetId)}/columns/${encodeURIComponent(columnName)}/references`,
   );
 }
 
@@ -319,7 +319,7 @@ export async function getDatasetVersions(
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   const qs = query.toString();
-  return apiFetch<DatasetVersionListResponse>(`/datasets/${datasetId}/versions/${qs ? `?${qs}` : ''}`);
+  return apiFetch<DatasetVersionListResponse>(`/datasets/${encodeURIComponent(datasetId)}/versions/${qs ? `?${qs}` : ''}`);
 }
 
 export async function refreshDataset(
@@ -339,7 +339,7 @@ export async function refreshDataset(
     ...(acceptBlockedRunId ? { accept_blocked_run_id: acceptBlockedRunId } : {}),
     ...(verificationPolicy ? { verification_policy: verificationPolicy } : {}),
   };
-  return apiFetch<DatasetRefreshResponse>(`/datasets/${datasetId}/refresh`, {
+  return apiFetch<DatasetRefreshResponse>(`/datasets/${encodeURIComponent(datasetId)}/refresh`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -349,7 +349,7 @@ export async function restorePreviousVersion(
   datasetId: string,
   expectedVersionNumber: number,
 ): Promise<RestorePreviousVersionResponse> {
-  return apiFetch<RestorePreviousVersionResponse>(`/datasets/${datasetId}/previous-version/restore`, {
+  return apiFetch<RestorePreviousVersionResponse>(`/datasets/${encodeURIComponent(datasetId)}/previous-version/restore`, {
     method: 'POST',
     body: JSON.stringify({ expected_version_number: expectedVersionNumber }),
   });
@@ -363,11 +363,11 @@ export async function getDatasetRefreshRuns(
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   const qs = query.toString();
-  return apiFetch<DatasetRefreshRunListResponse>(`/datasets/${datasetId}/refresh-runs${qs ? `?${qs}` : ''}`);
+  return apiFetch<DatasetRefreshRunListResponse>(`/datasets/${encodeURIComponent(datasetId)}/refresh-runs${qs ? `?${qs}` : ''}`);
 }
 
 export async function listAttributes(datasetId: string): Promise<AttributeMetadataListResponse> {
-  return apiFetch<AttributeMetadataListResponse>(`/datasets/${datasetId}/attributes/`);
+  return apiFetch<AttributeMetadataListResponse>(`/datasets/${encodeURIComponent(datasetId)}/attributes/`);
 }
 
 export async function updateAttribute(
@@ -375,14 +375,14 @@ export async function updateAttribute(
   attributeId: string,
   data: AttributeMetadataUpdate,
 ): Promise<AttributeMetadataResponse> {
-  return apiFetch<AttributeMetadataResponse>(`/datasets/${datasetId}/attributes/${attributeId}/`, {
+  return apiFetch<AttributeMetadataResponse>(`/datasets/${encodeURIComponent(datasetId)}/attributes/${encodeURIComponent(attributeId)}/`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
 export async function validateDataset(datasetId: string): Promise<ValidationResultResponse> {
-  return apiFetch<ValidationResultResponse>(`/datasets/${datasetId}/validate/`);
+  return apiFetch<ValidationResultResponse>(`/datasets/${encodeURIComponent(datasetId)}/validate/`);
 }
 
 export async function requestPresignedReupload(
@@ -392,7 +392,7 @@ export async function requestPresignedReupload(
   contentType?: string,
 ): Promise<PresignedUploadResponse> {
   try {
-    return await apiFetch<PresignedUploadResponse>(`/datasets/${datasetId}/reupload/presigned`, {
+    return await apiFetch<PresignedUploadResponse>(`/datasets/${encodeURIComponent(datasetId)}/reupload/presigned`, {
       method: 'POST',
       body: JSON.stringify({
         filename,
@@ -411,7 +411,7 @@ export async function completePresignedReupload(
   parts?: { etag: string; part_number: number }[],
 ): Promise<UploadResponse> {
   try {
-    return await apiFetch<UploadResponse>(`/datasets/${datasetId}/reupload/presigned/${jobId}/complete`, {
+    return await apiFetch<UploadResponse>(`/datasets/${encodeURIComponent(datasetId)}/reupload/presigned/${encodeURIComponent(jobId)}/complete`, {
       method: 'POST',
       body: JSON.stringify({ parts: parts ?? [] }),
     });
@@ -444,7 +444,7 @@ export interface RelatedDatasetsResponse {
 export async function fetchRelatedDatasets(
   datasetId: string,
 ): Promise<RelatedDatasetsResponse> {
-  return apiFetch<RelatedDatasetsResponse>(`/datasets/${datasetId}/related/`);
+  return apiFetch<RelatedDatasetsResponse>(`/datasets/${encodeURIComponent(datasetId)}/related/`);
 }
 
 export async function reuploadPresigned(
@@ -491,7 +491,7 @@ export async function listRelationships(datasetId: string): Promise<import('@/ty
   // GAP-033: the endpoint now returns the standard list envelope
   // ({ relationships, total }); unwrap to keep this helper's array contract.
   const res = await apiFetch<import('@/types/api').DatasetRelationshipListResponse>(
-    `/datasets/${datasetId}/relationships/`,
+    `/datasets/${encodeURIComponent(datasetId)}/relationships/`,
   );
   return res.relationships;
 }
@@ -523,7 +523,7 @@ export async function getRelatedRecords(
   if (params?.after !== undefined) query.set('after', String(params.after));
   const qs = query.toString();
   return apiFetch<import('@/types/api').DatasetRowsResponse>(
-    `/datasets/${datasetId}/features/${featureGid}/related/${relationshipId}/${qs ? `?${qs}` : ''}`,
+    `/datasets/${encodeURIComponent(datasetId)}/features/${encodeURIComponent(featureGid)}/related/${encodeURIComponent(relationshipId)}/${qs ? `?${qs}` : ''}`,
   );
 }
 
@@ -565,7 +565,7 @@ export async function commitFanOut(
   // the same is true of a 200 response naming per-layer failures — see
   // below, where that case gets its own capture.
   try {
-    const response = await apiFetch<FanOutCommitResponse>(`/ingest/commit-fan-out/${jobId}`, {
+    const response = await apiFetch<FanOutCommitResponse>(`/ingest/commit-fan-out/${encodeURIComponent(jobId)}`, {
       method: 'POST',
       body: JSON.stringify({ layers }),
     });

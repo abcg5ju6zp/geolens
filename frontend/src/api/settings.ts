@@ -247,14 +247,14 @@ export async function createOAuthProvider(data: OAuthProviderCreateData): Promis
 }
 
 export async function updateOAuthProvider(id: string, data: OAuthProviderUpdateData): Promise<OAuthProviderConfig> {
-  return apiFetch<OAuthProviderConfig>(`/settings/oauth-providers/${id}`, {
+  return apiFetch<OAuthProviderConfig>(`/settings/oauth-providers/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteOAuthProvider(id: string): Promise<void> {
-  return apiFetch<void>(`/settings/oauth-providers/${id}`, {
+  return apiFetch<void>(`/settings/oauth-providers/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

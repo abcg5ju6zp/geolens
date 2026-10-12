@@ -70,7 +70,7 @@ export async function listMaps(
 }
 
 export async function getMap(id: string): Promise<MapResponse> {
-  const resp = await apiFetch<MapResponse>(`/maps/${id}`);
+  const resp = await apiFetch<MapResponse>(`/maps/${encodeURIComponent(id)}`);
   if (resp.layers) {
     for (const l of resp.layers) {
       const normalized = normalizeLayerStyleState(l.style_config, l.paint, l.dataset_geometry_type, {
@@ -94,7 +94,7 @@ export async function getMap(id: string): Promise<MapResponse> {
 }
 
 export async function getMapAccess(id: string): Promise<MapAccessResponse> {
-  return apiFetch<MapAccessResponse>(`/maps/${id}/access/`);
+  return apiFetch<MapAccessResponse>(`/maps/${encodeURIComponent(id)}/access/`);
 }
 
 export async function getMapHistory(
@@ -105,7 +105,7 @@ export async function getMapHistory(
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   const qs = query.toString();
-  return apiFetch<MapHistoryListResponse>(`/maps/${mapId}/history${qs ? `?${qs}` : ''}`);
+  return apiFetch<MapHistoryListResponse>(`/maps/${encodeURIComponent(mapId)}/history${qs ? `?${qs}` : ''}`);
 }
 
 export async function createMap(data: MapCreateRequest): Promise<MapResponse> {
@@ -119,7 +119,7 @@ export async function updateMap(
   id: string,
   data: MapUpdateRequest,
 ): Promise<MapResponse> {
-  return apiFetch<MapResponse>(`/maps/${id}`, {
+  return apiFetch<MapResponse>(`/maps/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
@@ -129,7 +129,7 @@ export async function patchMapLayers(
   id: string,
   diff: MapLayerDiffRequest,
 ): Promise<MapResponse> {
-  const resp = await apiFetch<MapResponse>(`/maps/${id}/layers`, {
+  const resp = await apiFetch<MapResponse>(`/maps/${encodeURIComponent(id)}/layers`, {
     method: 'PATCH',
     body: JSON.stringify(diff),
   });
@@ -146,13 +146,13 @@ export async function patchMapLayers(
 }
 
 export async function duplicateMap(mapId: string): Promise<DuplicateMapResponse> {
-  return apiFetch<DuplicateMapResponse>(`/maps/${mapId}/duplicate/`, {
+  return apiFetch<DuplicateMapResponse>(`/maps/${encodeURIComponent(mapId)}/duplicate/`, {
     method: 'POST',
   });
 }
 
 export async function deleteMap(id: string): Promise<void> {
-  await apiFetch(`/maps/${id}`, {
+  await apiFetch(`/maps/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
@@ -161,7 +161,7 @@ export async function addLayerToMapApi(
   mapId: string,
   data: MapLayerInput,
 ): Promise<MapLayerResponse> {
-  const layer = await apiFetch<MapLayerResponse>(`/maps/${mapId}/layers`, {
+  const layer = await apiFetch<MapLayerResponse>(`/maps/${encodeURIComponent(mapId)}/layers`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -177,7 +177,7 @@ export async function removeLayerFromMapApi(
   mapId: string,
   layerId: string,
 ): Promise<void> {
-  await apiFetch(`/maps/${mapId}/layers/${layerId}`, {
+  await apiFetch(`/maps/${encodeURIComponent(mapId)}/layers/${encodeURIComponent(layerId)}`, {
     method: 'DELETE',
   });
 }
@@ -193,7 +193,7 @@ export async function bulkDeleteLayersApi(
   mapId: string,
   layerIds: string[],
 ): Promise<import('@/types/api').MapLayerBulkDeleteResponse> {
-  return apiFetch(`/maps/${mapId}/layers/bulk-delete`, {
+  return apiFetch(`/maps/${encodeURIComponent(mapId)}/layers/bulk-delete`, {
     method: 'POST',
     body: JSON.stringify({ layer_ids: layerIds }),
   });
@@ -218,7 +218,7 @@ export async function getSharedMap(token: string, embedToken?: string): Promise<
   if (embedToken) {
     extraHeaders['X-Embed-Token'] = embedToken;
   }
-  const resp = await apiFetch<SharedMapResponse | null>(`/maps/shared/${token}`, {
+  const resp = await apiFetch<SharedMapResponse | null>(`/maps/shared/${encodeURIComponent(token)}`, {
     headers: extraHeaders,
     expected404: true,
   });
@@ -248,11 +248,11 @@ export async function getSharedMap(token: string, embedToken?: string): Promise<
 }
 
 export async function checkMapVisibility(mapId: string): Promise<VisibilityCheckResponse> {
-  return apiFetch<VisibilityCheckResponse>(`/maps/${mapId}/visibility-check/`);
+  return apiFetch<VisibilityCheckResponse>(`/maps/${encodeURIComponent(mapId)}/visibility-check/`);
 }
 
 export async function exportMapStyleJson(mapId: string): Promise<Record<string, unknown>> {
-  return apiFetch<Record<string, unknown>>(`/maps/${mapId}/style.json`);
+  return apiFetch<Record<string, unknown>>(`/maps/${encodeURIComponent(mapId)}/style.json`);
 }
 
 export async function importMapStyleJson(style: Record<string, unknown>): Promise<MapStyleImportResponse> {
@@ -276,7 +276,7 @@ export async function uploadMapIcon(file: File): Promise<MapIconResponse> {
 }
 
 export async function publishMap(id: string, visibility: 'public' | 'private' | 'internal'): Promise<MapResponse> {
-  return apiFetch<MapResponse>(`/maps/${id}`, {
+  return apiFetch<MapResponse>(`/maps/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify({ visibility }),
   });
@@ -314,46 +314,46 @@ export async function createShareToken(
   expiration: ShareExpirationInput = {},
 ): Promise<ShareTokenResponse> {
   const body = serializeShareExpiration(expiration);
-  return apiFetch<ShareTokenResponse>(`/maps/${mapId}/share/`, {
+  return apiFetch<ShareTokenResponse>(`/maps/${encodeURIComponent(mapId)}/share/`, {
     method: 'POST',
     ...(body && { body }),
   });
 }
 
 export async function revokeShareToken(mapId: string): Promise<void> {
-  await apiFetch(`/maps/${mapId}/share/`, { method: 'DELETE' });
+  await apiFetch(`/maps/${encodeURIComponent(mapId)}/share/`, { method: 'DELETE' });
 }
 
 export async function updateShareTokenExpiration(
   mapId: string,
   expiration: ShareExpirationInput,
 ): Promise<ShareTokenResponse> {
-  return apiFetch<ShareTokenResponse>(`/maps/${mapId}/share/`, {
+  return apiFetch<ShareTokenResponse>(`/maps/${encodeURIComponent(mapId)}/share/`, {
     method: 'PATCH',
     body: serializeShareExpiration(expiration),
   });
 }
 
 export async function getMapShareToken(mapId: string): Promise<ShareTokenResponse | null> {
-  return apiFetch<ShareTokenResponse | null>(`/maps/${mapId}/share/`);
+  return apiFetch<ShareTokenResponse | null>(`/maps/${encodeURIComponent(mapId)}/share/`);
 }
 
 export async function uploadThumbnail(mapId: string, dataUri: string): Promise<void> {
-  await apiFetch(`/maps/${mapId}/thumbnail/`, {
+  await apiFetch(`/maps/${encodeURIComponent(mapId)}/thumbnail/`, {
     method: 'PUT',
     body: JSON.stringify({ data_uri: dataUri }),
   });
 }
 
 export async function uploadOgImage(mapId: string, dataUri: string): Promise<void> {
-  await apiFetch(`/maps/${mapId}/og-image/`, {
+  await apiFetch(`/maps/${encodeURIComponent(mapId)}/og-image/`, {
     method: 'PUT',
     body: JSON.stringify({ data_uri: dataUri }),
   });
 }
 
 export async function fetchDatasetMaps(datasetId: string): Promise<MapListResponse> {
-  return apiFetch<MapListResponse>(`/datasets/${datasetId}/maps/`);
+  return apiFetch<MapListResponse>(`/datasets/${encodeURIComponent(datasetId)}/maps/`);
 }
 
 export interface StreamEvent {
@@ -455,7 +455,7 @@ export async function fetchColumnValues(
 ): Promise<ColumnValuesResponse> {
   const params = limit ? `?limit=${limit}` : '';
   return apiFetch<ColumnValuesResponse>(
-    `/datasets/${datasetId}/columns/${columnName}/values/${params}`,
+    `/datasets/${encodeURIComponent(datasetId)}/columns/${encodeURIComponent(columnName)}/values/${params}`,
   );
 }
 
@@ -464,7 +464,7 @@ export async function fetchColumnStats(
   columnName: string,
 ): Promise<ColumnStatsResponse> {
   return apiFetch<ColumnStatsResponse>(
-    `/datasets/${datasetId}/columns/${columnName}/stats/`,
+    `/datasets/${encodeURIComponent(datasetId)}/columns/${encodeURIComponent(columnName)}/stats/`,
   );
 }
 

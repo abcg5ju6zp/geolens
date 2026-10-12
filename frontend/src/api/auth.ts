@@ -278,7 +278,7 @@ export async function createMyApiKey(
 }
 
 export async function revokeMyApiKey(keyId: string): Promise<void> {
-  await apiFetch(`/auth/api-keys/${keyId}`, { method: 'DELETE' });
+  await apiFetch(`/auth/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' });
 }
 
 export async function getMyPermissions(): Promise<{ permissions: Record<string, boolean> }> {

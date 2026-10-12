@@ -110,14 +110,14 @@ export async function updateSamlProvider(
   id: string,
   data: SamlProviderUpdateData,
 ): Promise<SamlProviderConfig> {
-  return apiFetch<SamlProviderConfig>(`/settings/oauth-providers/${id}`, {
+  return apiFetch<SamlProviderConfig>(`/settings/oauth-providers/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteSamlProvider(id: string): Promise<void> {
-  return apiFetch<void>(`/settings/oauth-providers/${id}`, {
+  return apiFetch<void>(`/settings/oauth-providers/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
@@ -132,7 +132,7 @@ export async function deleteSamlProvider(id: string): Promise<void> {
  * the proxy rewrite at frontend/vite.config.ts:80-87.
  */
 export async function fetchSamlMetadata(slug: string): Promise<string> {
-  const response = await fetch(`/api/auth/saml/${slug}/metadata`);
+  const response = await fetch(`/api/auth/saml/${encodeURIComponent(slug)}/metadata`);
   if (!response.ok) {
     let detail: unknown;
     try {

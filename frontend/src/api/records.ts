@@ -13,18 +13,18 @@ import type {
 
 // Contacts
 export async function listContacts(recordId: string): Promise<ContactListResponse> {
-  return apiFetch<ContactListResponse>(`/records/${recordId}/contacts/`);
+  return apiFetch<ContactListResponse>(`/records/${encodeURIComponent(recordId)}/contacts/`);
 }
 
 export async function createContact(recordId: string, data: ContactCreate): Promise<ContactResponse> {
-  return apiFetch<ContactResponse>(`/records/${recordId}/contacts/`, {
+  return apiFetch<ContactResponse>(`/records/${encodeURIComponent(recordId)}/contacts/`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteContact(recordId: string, contactId: string): Promise<void> {
-  await apiFetch(`/records/${recordId}/contacts/${contactId}/`, { method: 'DELETE' });
+  await apiFetch(`/records/${encodeURIComponent(recordId)}/contacts/${encodeURIComponent(contactId)}/`, { method: 'DELETE' });
 }
 
 // Keywords
@@ -38,23 +38,23 @@ export async function listKeywords(
   if (opts?.audienceVisibility) params.set('audience_visibility', opts.audienceVisibility);
   if (opts?.audienceRecordStatus) params.set('audience_record_status', opts.audienceRecordStatus);
   const qs = params.size > 0 ? `?${params.toString()}` : '';
-  return apiFetch<KeywordListResponse>(`/records/${recordId}/keywords/${qs}`);
+  return apiFetch<KeywordListResponse>(`/records/${encodeURIComponent(recordId)}/keywords/${qs}`);
 }
 
 export async function createKeyword(recordId: string, data: KeywordCreate): Promise<KeywordResponse> {
-  return apiFetch<KeywordResponse>(`/records/${recordId}/keywords/`, {
+  return apiFetch<KeywordResponse>(`/records/${encodeURIComponent(recordId)}/keywords/`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteKeyword(recordId: string, keywordId: string): Promise<void> {
-  await apiFetch(`/records/${recordId}/keywords/${keywordId}/`, { method: 'DELETE' });
+  await apiFetch(`/records/${encodeURIComponent(recordId)}/keywords/${encodeURIComponent(keywordId)}/`, { method: 'DELETE' });
 }
 
 // Distributions
 export async function listDistributions(recordId: string): Promise<DistributionListResponse> {
-  return apiFetch<DistributionListResponse>(`/records/${recordId}/distributions/`);
+  return apiFetch<DistributionListResponse>(`/records/${encodeURIComponent(recordId)}/distributions/`);
 }
 
 // feat(#1395): the set-primary control — the only mutation the UI issues
@@ -65,7 +65,7 @@ export async function updateDistribution(
   distributionId: string,
   data: DistributionUpdate,
 ): Promise<DistributionResponse> {
-  return apiFetch<DistributionResponse>(`/records/${recordId}/distributions/${distributionId}/`, {
+  return apiFetch<DistributionResponse>(`/records/${encodeURIComponent(recordId)}/distributions/${encodeURIComponent(distributionId)}/`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });

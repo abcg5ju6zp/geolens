@@ -255,7 +255,7 @@ export function VrtCreatorForm({ initialSourceId, initialSourceIds, onCancel }: 
   const { data: initialSource, isError: initialSourceError } = useQuery({
     queryKey: queryKeys.ogcRecords.detail(initialSourceId!),
     queryFn: () =>
-      apiFetch<OGCRecordResponse>(`/collections/datasets/items/${initialSourceId}`),
+      apiFetch<OGCRecordResponse>(`/collections/datasets/items/${encodeURIComponent(initialSourceId!)}`),
     enabled: !!initialSourceId,
   });
 
@@ -277,7 +277,7 @@ export function VrtCreatorForm({ initialSourceId, initialSourceIds, onCancel }: 
   const multiSourceQueries = useQueries({
     queries: (initialSourceIds && !initialSourceId ? initialSourceIds : []).map((id) => ({
       queryKey: queryKeys.ogcRecords.detail(id),
-      queryFn: () => apiFetch<OGCRecordResponse>(`/collections/datasets/items/${id}`),
+      queryFn: () => apiFetch<OGCRecordResponse>(`/collections/datasets/items/${encodeURIComponent(id)}`),
       enabled: true,
     })),
   });

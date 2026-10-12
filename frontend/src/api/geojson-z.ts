@@ -20,7 +20,7 @@ export interface GeoJsonFetchOptions {
 export type GeoJsonZResponse = BoundedGeoJsonResponse;
 
 function boundedGeoJsonPath(datasetId: string) {
-  return `/datasets/${datasetId}/features.geojson`;
+  return `/datasets/${encodeURIComponent(datasetId)}/features.geojson`;
 }
 
 function directFetchPath(datasetId: string) {

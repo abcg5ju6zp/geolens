@@ -7,7 +7,7 @@ export function createEmbedToken(
   allowedOrigins?: string[],
 ): Promise<EmbedTokenCreatedResponse> {
   return apiFetch<EmbedTokenCreatedResponse>(
-    `/maps/${mapId}/embed-tokens/`,
+    `/maps/${encodeURIComponent(mapId)}/embed-tokens/`,
     {
       method: 'POST',
       body: JSON.stringify({
@@ -22,7 +22,7 @@ export async function listEmbedTokens(
   mapId: string,
 ): Promise<{ tokens: EmbedTokenResponse[]; total: number }> {
   return apiFetch<{ tokens: EmbedTokenResponse[]; total: number }>(
-    `/maps/${mapId}/embed-tokens/`,
+    `/maps/${encodeURIComponent(mapId)}/embed-tokens/`,
   );
 }
 
@@ -32,7 +32,7 @@ export async function updateEmbedTokenOrigins(
   allowedOrigins: string[] | null,
 ): Promise<EmbedTokenResponse> {
   return apiFetch<EmbedTokenResponse>(
-    `/maps/${mapId}/embed-tokens/${tokenId}/`,
+    `/maps/${encodeURIComponent(mapId)}/embed-tokens/${encodeURIComponent(tokenId)}/`,
     {
       method: 'PATCH',
       body: JSON.stringify({ allowed_origins: allowedOrigins }),
@@ -45,7 +45,7 @@ export async function revokeEmbedToken(
   tokenId: string,
 ): Promise<EmbedTokenResponse> {
   return apiFetch<EmbedTokenResponse>(
-    `/maps/${mapId}/embed-tokens/${tokenId}/`,
+    `/maps/${encodeURIComponent(mapId)}/embed-tokens/${encodeURIComponent(tokenId)}/`,
     { method: 'DELETE' },
   );
 }

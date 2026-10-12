@@ -18,7 +18,7 @@ export async function listCollections(
 }
 
 export async function getCollection(id: string): Promise<CollectionResponse> {
-  return apiFetch<CollectionResponse>(`/catalog/collections/${id}`);
+  return apiFetch<CollectionResponse>(`/catalog/collections/${encodeURIComponent(id)}`);
 }
 
 export async function createCollection(
@@ -34,14 +34,14 @@ export async function updateCollection(
   id: string,
   data: CollectionUpdateRequest,
 ): Promise<CollectionResponse> {
-  return apiFetch<CollectionResponse>(`/catalog/collections/${id}`, {
+  return apiFetch<CollectionResponse>(`/catalog/collections/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
 
 export async function deleteCollection(id: string): Promise<void> {
-  await apiFetch(`/catalog/collections/${id}`, {
+  await apiFetch(`/catalog/collections/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
@@ -50,7 +50,7 @@ export async function addDatasetsToCollection(
   collectionId: string,
   datasetIds: string[],
 ): Promise<{ added: number }> {
-  return apiFetch<{ added: number }>(`/catalog/collections/${collectionId}/datasets/`, {
+  return apiFetch<{ added: number }>(`/catalog/collections/${encodeURIComponent(collectionId)}/datasets/`, {
     method: 'POST',
     body: JSON.stringify({ dataset_ids: datasetIds }),
   });
@@ -60,7 +60,7 @@ export async function removeDatasetFromCollection(
   collectionId: string,
   datasetId: string,
 ): Promise<void> {
-  await apiFetch(`/catalog/collections/${collectionId}/datasets/${datasetId}`, {
+  await apiFetch(`/catalog/collections/${encodeURIComponent(collectionId)}/datasets/${encodeURIComponent(datasetId)}`, {
     method: 'DELETE',
   });
 }
@@ -73,5 +73,5 @@ export async function getCollectionDatasets(
   if (params.skip !== undefined) query.set('skip', String(params.skip));
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   const qs = query.toString();
-  return apiFetch<DatasetListResponse>(`/catalog/collections/${collectionId}/datasets/${qs ? `?${qs}` : ''}`);
+  return apiFetch<DatasetListResponse>(`/catalog/collections/${encodeURIComponent(collectionId)}/datasets/${qs ? `?${qs}` : ''}`);
 }

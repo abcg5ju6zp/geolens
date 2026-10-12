@@ -48,7 +48,7 @@ export type TileToken = VectorTileToken | RasterTileToken;
  * Fetch a signed tile token for a dataset using JWT auth (via apiFetch).
  */
 export function getTileToken(datasetId: string): Promise<TileToken> {
-  return apiFetch<TileToken>(`/tiles/token/${datasetId}/`);
+  return apiFetch<TileToken>(`/tiles/token/${encodeURIComponent(datasetId)}/`);
 }
 
 /** Error entry returned by the batch endpoint when a single dataset fails. */
