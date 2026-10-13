@@ -596,21 +596,21 @@ def test_no_external_imports_of_dataset_domain_submodules() -> None:
     """Dataset callers use the public service facade, never split internals.
 
     The split modules may import each other; the facade re-exports their supported surface. Tests are excluded so they can exercise internals directly."""
-    # Pattern matches any of the 5 sub-modules OR the _sql_safety helper.
+    # Pattern matches every split service module OR the _sql_safety helper.
     # _sql_safety is an internal module (underscore prefix) holding shared
     # SQL-injection-prevention regexes; external callers must reach
     # _safe_table_ref through the service.py façade re-export, not directly.
     pattern = (
         r"from app\.modules\.catalog\.datasets\.domain\."
         r"(service_(analysis|create|query|lifecycle|metadata|relationships"
-        r"|previous_version)"
+        r"|previous_version|retirement|retirement_items)"
         r"|_sql_safety)"
     )
 
     result = _git_grep(pattern, "backend/app/")
 
     # Allowlisted paths — these MAY reference the sub-modules / _sql_safety.
-    # The 5 sub-modules cross-import each other (D-05) and import shared
+    # Dataset domain split modules may cross-import each other and shared
     # regexes from _sql_safety; service.py re-exports from all of them;
     # the test file references the path strings in this docstring.
     allowlist_prefixes = {
@@ -622,6 +622,8 @@ def test_no_external_imports_of_dataset_domain_submodules() -> None:
         "backend/app/modules/catalog/datasets/domain/service_metadata.py",
         "backend/app/modules/catalog/datasets/domain/service_relationships.py",
         "backend/app/modules/catalog/datasets/domain/service_previous_version.py",
+        "backend/app/modules/catalog/datasets/domain/service_retirement.py",
+        "backend/app/modules/catalog/datasets/domain/service_retirement_items.py",
         "backend/app/modules/catalog/datasets/domain/_sql_safety.py",
     }
 
@@ -649,7 +651,7 @@ def test_no_external_imports_of_dataset_domain_submodules() -> None:
             "imports from a catalog/datasets/domain/service_X sub-module "
             "directly. All consumers must go through the "
             "`app.modules.catalog.datasets.domain.service` façade. "
-            "Cross-imports between the 5 sub-modules themselves are "
+            "Cross-imports between dataset domain split modules are "
             "permitted (D-05) — only external bypasses are forbidden.\n"
             "Offending lines:\n" + "\n".join(offenders)
         )
